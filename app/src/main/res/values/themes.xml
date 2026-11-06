@@ -1,0 +1,3 @@
+<resources>
+    <style name="Theme.QuranCompanion" parent="android:Theme.Material.NoActionBar" />
+</resources>
