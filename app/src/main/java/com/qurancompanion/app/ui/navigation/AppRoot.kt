@@ -17,9 +17,13 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.NavType
+import androidx.navigation.navArgument
 import com.qurancompanion.app.ui.home.HomeScreen
 import com.qurancompanion.app.ui.more.MoreScreen
 import com.qurancompanion.app.ui.placeholder.PlaceholderScreen
+import com.qurancompanion.app.ui.quran.QuranScreen
+import com.qurancompanion.app.ui.quran.ReaderScreen
 
 private fun NavHostController.navigateTo(route: String) {
     if (TopLevelDestinations.any { it.route == route }) {
@@ -68,9 +72,25 @@ fun AppRoot() {
         ) {
             composable(Routes.HOME) { HomeScreen(onNavigate = { navController.navigateTo(it) }) }
             composable(Routes.MORE) { MoreScreen(onNavigate = { navController.navigateTo(it) }) }
+            composable(Routes.QURAN) {
+                QuranScreen(onOpenReader = { page, ayahId -> navController.navigateTo(Routes.reader(page, ayahId)) })
+            }
+            composable(
+                route = Routes.READER,
+                arguments = listOf(
+                    navArgument("page") { type = NavType.IntType },
+                    navArgument("ayah") { type = NavType.IntType; defaultValue = 0 },
+                ),
+            ) { entry ->
+                ReaderScreen(
+                    initialPage = entry.arguments?.getInt("page") ?: 1,
+                    highlightAyahId = entry.arguments?.getInt("ayah") ?: 0,
+                    onBack = { navController.popBackStack() },
+                )
+            }
 
             TopLevelDestinations
-                .filter { it.route != Routes.HOME && it.route != Routes.MORE }
+                .filter { it.route != Routes.HOME && it.route != Routes.MORE && it.route != Routes.QURAN }
                 .forEach { dest ->
                     composable(dest.route) {
                         PlaceholderScreen(dest.label, dest.phase, dest.icon, onBack = null)

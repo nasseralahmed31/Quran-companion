@@ -28,6 +28,9 @@ object Routes {
     const val ACTIVITY = "activity"
     const val SETTINGS = "settings"
     const val BACKUP = "backup"
+    const val READER = "reader/{page}?ayah={ayah}"
+
+    fun reader(page: Int, ayahId: Int = 0) = "reader/$page?ayah=$ayahId"
 }
 
 data class AppDestination(

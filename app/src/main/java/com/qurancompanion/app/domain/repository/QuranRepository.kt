@@ -1,0 +1,19 @@
+package com.qurancompanion.app.domain.repository
+
+import com.qurancompanion.app.domain.model.Ayah
+import com.qurancompanion.app.domain.model.Juz
+import com.qurancompanion.app.domain.model.QuranLoadResult
+import com.qurancompanion.app.domain.model.Surah
+import kotlinx.coroutines.flow.Flow
+
+interface QuranRepository {
+    /** Imports the bundled, validated Quran data on first run. Safe to call repeatedly. */
+    suspend fun ensureLoaded(): QuranLoadResult
+
+    fun observeSurahs(): Flow<List<Surah>>
+    fun observeJuz(): Flow<List<Juz>>
+    fun observePage(page: Int): Flow<List<Ayah>>
+
+    suspend fun ayahId(surahId: Int, ayahNumber: Int): Int?
+    suspend fun pageOfAyah(surahId: Int, ayahNumber: Int): Int?
+}
