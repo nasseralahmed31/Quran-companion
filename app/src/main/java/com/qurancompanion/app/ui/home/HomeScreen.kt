@@ -73,7 +73,7 @@ fun HomeScreen(
         item { Header() }
         item { ProgressHero(summary) }
         item { StatsGrid(summary) }
-        item { TodayGoalCard(summary) { onNavigate(Routes.GOALS) } }
+        item { TodayGoalCard(summary) { onNavigate(Routes.MEMORIZE) } }
         item { ReviewCard(summary) { onNavigate(Routes.REVIEW) } }
         item { QuickActions(onNavigate) }
     }

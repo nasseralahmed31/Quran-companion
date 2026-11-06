@@ -48,4 +48,7 @@ interface QuranDao {
 
     @Query("DELETE FROM juz")
     suspend fun deleteJuz()
+
+    @Query("SELECT firstAyahId FROM surahs WHERE id = :surahId")
+    suspend fun firstAyahId(surahId: Int): Int?
 }

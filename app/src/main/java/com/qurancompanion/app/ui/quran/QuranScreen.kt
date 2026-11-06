@@ -48,6 +48,7 @@ import com.qurancompanion.app.domain.model.QuranLoadResult
 import com.qurancompanion.app.domain.model.Surah
 import com.qurancompanion.app.ui.common.toArabicIndic
 import com.qurancompanion.app.ui.components.GlassCard
+import com.qurancompanion.app.ui.components.NumberField
 import kotlinx.coroutines.launch
 
 @Composable
@@ -276,21 +277,4 @@ private fun JumpCard(
             )
         }
     }
-}
-
-@Composable
-private fun NumberField(
-    value: String,
-    onChange: (String) -> Unit,
-    label: String,
-    modifier: Modifier = Modifier,
-) {
-    OutlinedTextField(
-        value = value,
-        onValueChange = { if (it.length <= 4 && it.all(Char::isDigit)) onChange(it) },
-        modifier = modifier,
-        singleLine = true,
-        label = { Text(label, maxLines = 1) },
-        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-    )
 }

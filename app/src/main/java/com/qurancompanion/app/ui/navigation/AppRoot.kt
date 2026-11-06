@@ -13,13 +13,17 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
-import androidx.navigation.NavType
 import androidx.navigation.navArgument
+import com.qurancompanion.app.ui.achievements.AchievementsScreen
+import com.qurancompanion.app.ui.activity.ActivityLogScreen
 import com.qurancompanion.app.ui.home.HomeScreen
+import com.qurancompanion.app.ui.memorize.MemorizeFormScreen
+import com.qurancompanion.app.ui.memorize.MemorizeScreen
 import com.qurancompanion.app.ui.more.MoreScreen
 import com.qurancompanion.app.ui.placeholder.PlaceholderScreen
 import com.qurancompanion.app.ui.quran.QuranScreen
@@ -36,6 +40,16 @@ private fun NavHostController.navigateTo(route: String) {
         navigate(route) { launchSingleTop = true }
     }
 }
+
+/** Routes that have a real screen; every other destination still shows the "under construction" page. */
+private val implementedRoutes = setOf(
+    Routes.HOME,
+    Routes.MORE,
+    Routes.QURAN,
+    Routes.MEMORIZE,
+    Routes.ACHIEVEMENTS,
+    Routes.ACTIVITY,
+)
 
 @Composable
 fun AppRoot() {
@@ -72,6 +86,7 @@ fun AppRoot() {
         ) {
             composable(Routes.HOME) { HomeScreen(onNavigate = { navController.navigateTo(it) }) }
             composable(Routes.MORE) { MoreScreen(onNavigate = { navController.navigateTo(it) }) }
+
             composable(Routes.QURAN) {
                 QuranScreen(onOpenReader = { page, ayahId -> navController.navigateTo(Routes.reader(page, ayahId)) })
             }
@@ -89,18 +104,37 @@ fun AppRoot() {
                 )
             }
 
-            TopLevelDestinations
-                .filter { it.route != Routes.HOME && it.route != Routes.MORE && it.route != Routes.QURAN }
+            composable(Routes.MEMORIZE) {
+                MemorizeScreen(
+                    onOpenForm = { id -> navController.navigateTo(Routes.memorizeForm(id)) },
+                    onOpenReader = { page, ayahId -> navController.navigateTo(Routes.reader(page, ayahId)) },
+                )
+            }
+            composable(
+                route = Routes.MEMORIZE_FORM,
+                arguments = listOf(navArgument("id") { type = NavType.LongType; defaultValue = 0L }),
+            ) { entry ->
+                MemorizeFormScreen(
+                    entryId = entry.arguments?.getLong("id") ?: 0L,
+                    onDone = { navController.popBackStack() },
+                )
+            }
+            composable(Routes.ACHIEVEMENTS) { AchievementsScreen(onBack = { navController.popBackStack() }) }
+            composable(Routes.ACTIVITY) { ActivityLogScreen(onBack = { navController.popBackStack() }) }
+
+            (TopLevelDestinations + MoreDestinations)
+                .filter { it.route !in implementedRoutes }
                 .forEach { dest ->
+                    val isTab = TopLevelDestinations.any { it.route == dest.route }
                     composable(dest.route) {
-                        PlaceholderScreen(dest.label, dest.phase, dest.icon, onBack = null)
+                        PlaceholderScreen(
+                            title = dest.label,
+                            phase = dest.phase,
+                            icon = dest.icon,
+                            onBack = if (isTab) null else ({ navController.popBackStack() }),
+                        )
                     }
                 }
-            MoreDestinations.forEach { dest ->
-                composable(dest.route) {
-                    PlaceholderScreen(dest.label, dest.phase, dest.icon, onBack = { navController.popBackStack() })
-                }
-            }
         }
     }
 }

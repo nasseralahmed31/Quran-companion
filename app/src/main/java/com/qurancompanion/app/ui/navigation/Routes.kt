@@ -29,8 +29,11 @@ object Routes {
     const val SETTINGS = "settings"
     const val BACKUP = "backup"
     const val READER = "reader/{page}?ayah={ayah}"
+    const val MEMORIZE_FORM = "memorize_form?id={id}"
 
     fun reader(page: Int, ayahId: Int = 0) = "reader/$page?ayah=$ayahId"
+
+    fun memorizeForm(id: Long = 0L) = "memorize_form?id=$id"
 }
 
 data class AppDestination(

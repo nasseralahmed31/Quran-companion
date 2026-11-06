@@ -8,7 +8,9 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
@@ -36,6 +38,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.qurancompanion.app.domain.model.Ayah
+import com.qurancompanion.app.domain.model.AyahMark
 import com.qurancompanion.app.domain.model.QuranConstants
 import com.qurancompanion.app.ui.common.toArabicIndic
 import com.qurancompanion.app.ui.theme.Emerald700
@@ -92,6 +95,8 @@ private fun QuranPage(
 ) {
     val flow = remember(page) { viewModel.observePage(page) }
     val ayahs by flow.collectAsStateWithLifecycle(initialValue = emptyList())
+    val marksFlow = remember(page) { viewModel.observeMarks(page) }
+    val marks by marksFlow.collectAsStateWithLifecycle(initialValue = emptyMap())
 
     Column(
         Modifier
@@ -107,11 +112,12 @@ private fun QuranPage(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
+        if (marks.isNotEmpty()) MarksLegend()
         for (run in ayahs.splitBySurah()) {
             if (run.first().ayahNumber == 1) {
                 SurahBanner(surahNames[run.first().surahId].orEmpty())
             }
-            AyahRun(run, highlightAyahId)
+            AyahRun(run, highlightAyahId, marks)
         }
     }
 }
@@ -131,14 +137,28 @@ private fun SurahBanner(name: String) {
 }
 
 @Composable
-private fun AyahRun(run: List<Ayah>, highlightAyahId: Int) {
-    val highlight = MaterialTheme.colorScheme.primary.copy(alpha = 0.22f)
-    val marker = MaterialTheme.colorScheme.secondary
-    val annotated = remember(run, highlightAyahId, highlight, marker) {
+private fun AyahRun(run: List<Ayah>, highlightAyahId: Int, marks: Map<Int, AyahMark>) {
+    val colors = MaterialTheme.colorScheme
+    val target = colors.primary.copy(alpha = 0.32f)
+    val memorized = colors.primary.copy(alpha = 0.12f)
+    val inProgress = colors.secondary.copy(alpha = 0.14f)
+    val needsReview = colors.error.copy(alpha = 0.14f)
+    val marker = colors.secondary
+    val annotated = remember(run, highlightAyahId, marks, target, memorized, inProgress, needsReview, marker) {
         buildAnnotatedString {
             run.forEach { a ->
-                if (a.id == highlightAyahId) {
-                    withStyle(SpanStyle(background = highlight)) { append(a.text) }
+                val background = if (a.id == highlightAyahId) {
+                    target
+                } else {
+                    when (marks[a.id]) {
+                        AyahMark.MEMORIZED -> memorized
+                        AyahMark.IN_PROGRESS -> inProgress
+                        AyahMark.NEEDS_REVIEW -> needsReview
+                        null -> null
+                    }
+                }
+                if (background != null) {
+                    withStyle(SpanStyle(background = background)) { append(a.text) }
                 } else {
                     append(a.text)
                 }
@@ -153,9 +173,27 @@ private fun AyahRun(run: List<Ayah>, highlightAyahId: Int) {
         fontSize = 26.sp,
         lineHeight = 52.sp,
         textAlign = TextAlign.Justify,
-        color = MaterialTheme.colorScheme.onBackground,
+        color = colors.onBackground,
         modifier = Modifier.fillMaxWidth(),
     )
+}
+
+@Composable
+private fun MarksLegend() {
+    val colors = MaterialTheme.colorScheme
+    Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
+        LegendItem("محفوظ", colors.primary)
+        LegendItem("قيد الحفظ", colors.secondary)
+        LegendItem("يحتاج مراجعة", colors.error)
+    }
+}
+
+@Composable
+private fun LegendItem(label: String, color: androidx.compose.ui.graphics.Color) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        Box(Modifier.size(10.dp).clip(CircleShape).background(color.copy(alpha = 0.6f)))
+        Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
 }
 
 private fun List<Ayah>.splitBySurah(): List<List<Ayah>> {
