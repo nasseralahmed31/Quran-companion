@@ -35,7 +35,7 @@ class AchievementsViewModel(
         AchievementMetric.COMPLETED_SURAHS -> s.completedSurahs
         AchievementMetric.MEMORIZED_JUZ -> s.memorizedJuz
         AchievementMetric.STREAK_DAYS -> s.streakDays
-        AchievementMetric.REVIEWED_AYAHS -> 0 // review sessions arrive in phase 4
+        AchievementMetric.REVIEWED_AYAHS -> s.reviewedAyahs
     }
 
     companion object {

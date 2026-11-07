@@ -6,23 +6,16 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -33,7 +26,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -43,20 +35,21 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.qurancompanion.app.domain.model.MasteryLevel
 import com.qurancompanion.app.domain.model.MemorizationState
-import com.qurancompanion.app.domain.model.Surah
 import com.qurancompanion.app.domain.util.EpochDay
 import com.qurancompanion.app.ui.achievements.AchievementUnlockedDialog
 import com.qurancompanion.app.ui.common.formatEpochDay
 import com.qurancompanion.app.ui.common.toArabicIndic
 import com.qurancompanion.app.ui.components.GlassCard
 import com.qurancompanion.app.ui.components.NumberField
+import com.qurancompanion.app.ui.components.ScreenHeader
+import com.qurancompanion.app.ui.components.SurahPickerDialog
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MemorizeFormScreen(entryId: Long, onDone: () -> Unit) {
+fun MemorizeFormScreen(entryId: Long, presetStart: Int, presetEnd: Int, onDone: () -> Unit) {
     val vm: MemorizeFormViewModel = viewModel(
-        key = "memorize_form_$entryId",
-        factory = MemorizeFormViewModel.factory(entryId),
+        key = "memorize_form_${entryId}_${presetStart}_$presetEnd",
+        factory = MemorizeFormViewModel.factory(entryId, presetStart, presetEnd),
     )
     val s by vm.state.collectAsStateWithLifecycle()
     var showPicker by rememberSaveable { mutableStateOf(false) }
@@ -67,14 +60,7 @@ fun MemorizeFormScreen(entryId: Long, onDone: () -> Unit) {
     }
 
     Column(Modifier.fillMaxSize().statusBarsPadding().imePadding()) {
-        Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onDone) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "رجوع") }
-            Text(
-                if (s.isEdit) "تعديل سجل الحفظ" else "تسجيل حفظ جديد",
-                style = MaterialTheme.typography.titleLarge,
-                modifier = Modifier.padding(horizontal = 8.dp),
-            )
-        }
+        ScreenHeader(if (s.isEdit) "تعديل سجل الحفظ" else "تسجيل حفظ جديد", onDone)
 
         when {
             !s.loaded -> CircularProgressIndicator(Modifier.padding(24.dp))
@@ -83,31 +69,49 @@ fun MemorizeFormScreen(entryId: Long, onDone: () -> Unit) {
                 Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(14.dp),
             ) {
-                GlassCard(Modifier.fillMaxWidth(), onClick = { showPicker = true }) {
-                    Text("السورة", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text(
-                        s.selectedSurah?.let { "سورة ${it.nameAr}" } ?: "اختر السورة",
-                        style = MaterialTheme.typography.titleMedium,
-                    )
+                if (!s.isEdit && s.mode != FormMode.RANGE) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FilterChip(selected = s.mode == FormMode.SURAH, onClick = { vm.setMode(FormMode.SURAH) }, label = { Text("حسب السورة") })
+                        FilterChip(selected = s.mode == FormMode.PAGES, onClick = { vm.setMode(FormMode.PAGES) }, label = { Text("حسب الصفحات") })
+                    }
                 }
 
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    NumberField(s.from, vm::onFrom, "من الآية", Modifier.weight(1f), maxLength = 3)
-                    NumberField(s.to, vm::onTo, "إلى الآية", Modifier.weight(1f), maxLength = 3)
-                }
-                s.selectedSurah?.let {
-                    Text(
-                        "عدد آيات السورة: ${it.ayahCount.toArabicIndic()}",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                if (s.overlapCount > 0) {
-                    Text(
-                        "${s.overlapCount.toArabicIndic()} من هذه الآيات مسجّلة من قبل، وسيُحدَّث وضعها بهذا السجل.",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.secondary,
-                    )
+                when (s.mode) {
+                    FormMode.SURAH -> {
+                        GlassCard(Modifier.fillMaxWidth(), onClick = { showPicker = true }) {
+                            Text("السورة", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(
+                                s.selectedSurah?.let { "سورة ${it.nameAr}" } ?: "اختر السورة",
+                                style = MaterialTheme.typography.titleMedium,
+                            )
+                        }
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            NumberField(s.from, vm::onFrom, "من الآية", Modifier.weight(1f), maxLength = 3)
+                            NumberField(s.to, vm::onTo, "إلى الآية", Modifier.weight(1f), maxLength = 3)
+                        }
+                        s.selectedSurah?.let {
+                            Text(
+                                "عدد آيات السورة: ${it.ayahCount.toArabicIndic()}",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        if (s.overlapCount > 0) {
+                            Text(
+                                "${s.overlapCount.toArabicIndic()} من هذه الآيات مسجّلة من قبل، وسيُحدَّث وضعها بهذا السجل.",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.secondary,
+                            )
+                        }
+                    }
+                    FormMode.PAGES -> {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            NumberField(s.pageFrom, vm::onPageFrom, "من الصفحة", Modifier.weight(1f), maxLength = 3)
+                            NumberField(s.pageTo, vm::onPageTo, "إلى الصفحة", Modifier.weight(1f), maxLength = 3)
+                        }
+                        RangeSummary(s.rangeSummary, "مثال: إن حفظت من الصفحة ١ إلى ١٧ فأدخل ١ و١٧، وإن عبر النطاق عدة سور فسيُسجَّل لكل سورة سجل مستقل.")
+                    }
+                    FormMode.RANGE -> RangeSummary(s.rangeSummary, "مقدار اليوم من خطة هدفك.")
                 }
 
                 Text("تاريخ الحفظ: ${formatEpochDay(s.epochDay)}", style = MaterialTheme.typography.titleMedium)
@@ -176,7 +180,7 @@ fun MemorizeFormScreen(entryId: Long, onDone: () -> Unit) {
         AlertDialog(
             onDismissRequest = { confirmDelete = false },
             title = { Text("حذف السجل؟") },
-            text = { Text("سيُحذف هذا السجل وتُحدَّث حالة الآيات المرتبطة به.") },
+            text = { Text("سيُحذف هذا السجل وتُحدَّث حالة الآيات المرتبطة به وجدول مراجعته.") },
             confirmButton = {
                 TextButton(onClick = {
                     confirmDelete = false
@@ -192,39 +196,14 @@ fun MemorizeFormScreen(entryId: Long, onDone: () -> Unit) {
 }
 
 @Composable
-private fun SurahPickerDialog(surahs: List<Surah>, onPick: (Int) -> Unit, onDismiss: () -> Unit) {
-    var query by remember { mutableStateOf("") }
-    val filtered = remember(surahs, query) {
-        val q = query.trim()
-        surahs.filter { q.isEmpty() || it.nameAr.contains(q) || it.id.toString() == q }
+private fun RangeSummary(summary: String?, hint: String) {
+    GlassCard(Modifier.fillMaxWidth()) {
+        Text(summary ?: "أدخل النطاق ليظهر ملخصه هنا", style = MaterialTheme.typography.titleMedium)
+        Text(
+            hint,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 4.dp),
+        )
     }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("اختر السورة") },
-        text = {
-            if (surahs.isEmpty()) {
-                Text("نص المصحف غير محمّل بعد. افتح تبويب المصحف للتحقق من الحالة.")
-            } else {
-                Column {
-                    OutlinedTextField(
-                        value = query,
-                        onValueChange = { query = it },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                        label = { Text("ابحث باسم السورة أو رقمها") },
-                    )
-                    LazyColumn(Modifier.heightIn(max = 360.dp)) {
-                        items(filtered, key = { it.id }) { surah ->
-                            Text(
-                                "${surah.id.toArabicIndic()}. ${surah.nameAr}",
-                                style = MaterialTheme.typography.bodyLarge,
-                                modifier = Modifier.fillMaxWidth().clickable { onPick(surah.id) }.padding(vertical = 12.dp),
-                            )
-                        }
-                    }
-                }
-            }
-        },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("إغلاق") } },
-    )
 }

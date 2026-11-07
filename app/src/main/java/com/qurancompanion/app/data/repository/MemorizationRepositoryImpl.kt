@@ -1,13 +1,11 @@
 package com.qurancompanion.app.data.repository
 
 import androidx.room.withTransaction
-import com.qurancompanion.app.data.local.AchievementEntity
 import com.qurancompanion.app.data.local.ActivityEntity
 import com.qurancompanion.app.data.local.AyahProgressEntity
 import com.qurancompanion.app.data.local.MemorizationEntryEntity
 import com.qurancompanion.app.data.local.QuranDatabase
-import com.qurancompanion.app.domain.model.Achievement
-import com.qurancompanion.app.domain.model.AchievementMetric
+import com.qurancompanion.app.data.local.ReviewScheduleEntity
 import com.qurancompanion.app.domain.model.ActivityItem
 import com.qurancompanion.app.domain.model.ActivityType
 import com.qurancompanion.app.domain.model.AyahMark
@@ -17,13 +15,18 @@ import com.qurancompanion.app.domain.model.MemorizationState
 import com.qurancompanion.app.domain.model.SaveResult
 import com.qurancompanion.app.domain.repository.MemorizationRepository
 import com.qurancompanion.app.domain.util.EpochDay
-import com.qurancompanion.app.domain.util.StreakCalculator
+import com.qurancompanion.app.domain.util.ReviewScheduler
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
-class MemorizationRepositoryImpl(private val db: QuranDatabase) : MemorizationRepository {
+class MemorizationRepositoryImpl(
+    private val db: QuranDatabase,
+    private val updater: AyahProgressUpdater,
+    private val achievements: AchievementEvaluator,
+) : MemorizationRepository {
     private val dao = db.memorizationDao()
     private val quranDao = db.quranDao()
+    private val reviewDao = db.reviewDao()
 
     override fun observeEntries(): Flow<List<MemorizationEntry>> =
         dao.observeEntries().map { list -> list.map { it.toDomain() } }
@@ -35,37 +38,42 @@ class MemorizationRepositoryImpl(private val db: QuranDatabase) : MemorizationRe
 
     override suspend fun save(entry: MemorizationEntry): SaveResult = db.withTransaction {
         val now = System.currentTimeMillis()
-        val type: ActivityType
-        if (entry.id == 0L) {
-            dao.insertEntry(entry.toEntity(createdAt = now, updatedAt = now))
-            recomputeRange(entry.surahId, entry.fromAyah, entry.toAyah)
-            type = ActivityType.ADDED
-        } else {
-            val old = dao.getEntry(entry.id) ?: throw IllegalStateException("سجل الحفظ غير موجود")
-            dao.updateEntry(entry.toEntity(createdAt = old.createdAt, updatedAt = now))
-            recomputeRange(old.surahId, old.fromAyah, old.toAyah)
-            recomputeRange(entry.surahId, entry.fromAyah, entry.toAyah)
-            type = ActivityType.EDITED
+        saveOne(entry, now)
+        SaveResult(achievements.evaluate(now))
+    }
+
+    override suspend fun saveRange(
+        startAyahId: Int,
+        endAyahId: Int,
+        memorizedOn: Long,
+        state: MemorizationState,
+        mastery: MasteryLevel,
+        note: String,
+    ): SaveResult = db.withTransaction {
+        val first = quranDao.getAyah(startAyahId)
+        val last = quranDao.getAyah(endAyahId)
+        if (first == null || last == null || endAyahId < startAyahId) {
+            throw IllegalStateException("نطاق الآيات غير صحيح")
         }
-        dao.insertActivity(
-            ActivityEntity(
-                type = type.name,
-                day = EpochDay.today(),
-                timestamp = now,
-                surahId = entry.surahId,
-                fromAyah = entry.fromAyah,
-                toAyah = entry.toAyah,
-                detail = entry.displayMastery.label,
-            ),
-        )
-        SaveResult(evaluateAchievements(now))
+        val now = System.currentTimeMillis()
+        for (surahId in first.surahId..last.surahId) {
+            val from = if (surahId == first.surahId) first.ayahNumber else 1
+            val to = if (surahId == last.surahId) {
+                last.ayahNumber
+            } else {
+                quranDao.surahAyahCount(surahId) ?: throw IllegalStateException("سورة غير موجودة")
+            }
+            saveOne(MemorizationEntry(0L, surahId, from, to, memorizedOn, state, mastery, note), now)
+        }
+        SaveResult(achievements.evaluate(now))
     }
 
     override suspend fun delete(id: Long) {
         db.withTransaction {
             val old = dao.getEntry(id) ?: return@withTransaction
             dao.deleteEntry(id)
-            recomputeRange(old.surahId, old.fromAyah, old.toAyah)
+            reviewDao.deleteSchedule(id)
+            updater.recomputeRange(old.surahId, old.fromAyah, old.toAyah)
             dao.insertActivity(
                 ActivityEntity(
                     type = ActivityType.DELETED.name,
@@ -102,40 +110,55 @@ class MemorizationRepositoryImpl(private val db: QuranDatabase) : MemorizationRe
     override fun observePageMarks(page: Int): Flow<Map<Int, AyahMark>> =
         dao.observePageProgress(page).map { list -> list.associate { it.ayahId to markOf(it) } }
 
-    /**
-     * Rebuilds per-ayah progress for a range from the records covering it: the newest record
-     * (by date, then id) wins; ayahs no longer covered by any record are cleared.
-     */
-    private suspend fun recomputeRange(surahId: Int, from: Int, to: Int) {
-        val firstAyahId = quranDao.firstAyahId(surahId) ?: return
-        val entries = dao.entriesForSurah(surahId)
-        val upserts = ArrayList<AyahProgressEntity>()
-        val removals = ArrayList<Int>()
-        for (n in from..to) {
-            val ayahId = firstAyahId + n - 1
-            val winner = entries.firstOrNull { n in it.fromAyah..it.toAyah }
-            if (winner == null) {
-                removals.add(ayahId)
-            } else {
-                upserts.add(AyahProgressEntity(ayahId, winner.id, winner.state, winner.mastery, winner.memorizedOn))
-            }
+    private suspend fun saveOne(entry: MemorizationEntry, now: Long) {
+        val type: ActivityType
+        val entryId: Long
+        if (entry.id == 0L) {
+            entryId = dao.insertEntry(entry.toEntity(createdAt = now, updatedAt = now))
+            updater.recomputeRange(entry.surahId, entry.fromAyah, entry.toAyah)
+            type = ActivityType.ADDED
+        } else {
+            val old = dao.getEntry(entry.id) ?: throw IllegalStateException("سجل الحفظ غير موجود")
+            dao.updateEntry(entry.toEntity(createdAt = old.createdAt, updatedAt = now))
+            updater.recomputeRange(old.surahId, old.fromAyah, old.toAyah)
+            updater.recomputeRange(entry.surahId, entry.fromAyah, entry.toAyah)
+            entryId = entry.id
+            type = ActivityType.EDITED
         }
-        if (removals.isNotEmpty()) dao.deleteProgress(removals)
-        if (upserts.isNotEmpty()) dao.upsertProgress(upserts)
+        syncSchedule(entryId, entry)
+        dao.insertActivity(
+            ActivityEntity(
+                type = type.name,
+                day = EpochDay.today(),
+                timestamp = now,
+                surahId = entry.surahId,
+                fromAyah = entry.fromAyah,
+                toAyah = entry.toAyah,
+                detail = entry.displayMastery.label,
+            ),
+        )
     }
 
-    private suspend fun evaluateAchievements(now: Long): List<Achievement> {
-        val values = mapOf(
-            AchievementMetric.MEMORIZED_AYAHS to dao.memorizedCount(),
-            AchievementMetric.COMPLETED_SURAHS to dao.completedSurahsCount(),
-            AchievementMetric.MEMORIZED_JUZ to dao.memorizedJuzCount(),
-            AchievementMetric.STREAK_DAYS to StreakCalculator.current(dao.entryDays(), EpochDay.today()),
-            AchievementMetric.REVIEWED_AYAHS to 0, // review sessions arrive in phase 4
-        )
-        val unlocked = dao.unlockedKeys().toSet()
-        val fresh = Achievement.entries.filter { it.key !in unlocked && (values[it.metric] ?: 0) >= it.target }
-        fresh.forEach { dao.insertAchievement(AchievementEntity(it.key, now)) }
-        return fresh
+    /** Memorized records are reviewed; records still being learned are not scheduled. */
+    private suspend fun syncSchedule(entryId: Long, entry: MemorizationEntry) {
+        if (entry.state == MemorizationState.MEMORIZED) {
+            if (reviewDao.getSchedule(entryId) == null) {
+                val initial = ReviewScheduler.initial()
+                reviewDao.upsertSchedule(
+                    ReviewScheduleEntity(
+                        entryId = entryId,
+                        nextReviewDay = ReviewScheduler.firstDueDay(entry.memorizedOn, entry.displayMastery, EpochDay.today()),
+                        intervalDays = initial.intervalDays,
+                        ease = initial.ease,
+                        repetitions = initial.repetitions,
+                        lapses = initial.lapses,
+                        lastReviewDay = 0L,
+                    ),
+                )
+            }
+        } else {
+            reviewDao.deleteSchedule(entryId)
+        }
     }
 }
 

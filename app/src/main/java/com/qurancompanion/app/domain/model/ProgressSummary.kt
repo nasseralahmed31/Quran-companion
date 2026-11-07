@@ -9,6 +9,7 @@ data class ProgressSummary(
     val todayTargetAyahs: Int = 0,
     val todayDoneAyahs: Int = 0,
     val dueReviewAyahs: Int = 0,
+    val reviewedAyahs: Int = 0,
 ) {
     val fraction: Float
         get() = (memorizedAyahs / TOTAL_AYAHS.toFloat()).coerceIn(0f, 1f)

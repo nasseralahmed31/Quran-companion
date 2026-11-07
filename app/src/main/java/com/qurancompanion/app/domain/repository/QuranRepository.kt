@@ -16,4 +16,10 @@ interface QuranRepository {
 
     suspend fun ayahId(surahId: Int, ayahNumber: Int): Int?
     suspend fun pageOfAyah(surahId: Int, ayahNumber: Int): Int?
+    suspend fun getAyah(id: Int): Ayah?
+    suspend fun ayahsOfRange(surahId: Int, from: Int, to: Int): List<Ayah>
+    suspend fun allAyahs(): List<Ayah>
+
+    /** First and last global ayah id covered by pages [fromPage]..[toPage], or null if invalid. */
+    suspend fun ayahIdRangeOfPages(fromPage: Int, toPage: Int): Pair<Int, Int>?
 }

@@ -35,3 +35,12 @@ fun masteryColor(level: MasteryLevel): Color = when (level) {
     MasteryLevel.NEEDS_REVIEW -> Color(0xFFF59E0B)
     MasteryLevel.WEAK -> MaterialTheme.colorScheme.error
 }
+
+/** Short Arabic weekday name for a day number (days since 1970-01-01, a Thursday). */
+fun weekdayShort(day: Long): String {
+    val names = listOf("أحد", "اثنين", "ثلاثاء", "أربعاء", "خميس", "جمعة", "سبت")
+    return names[Math.floorMod(day + 4, 7L).toInt()]
+}
+
+/** 0 = Sunday ... 6 = Saturday. */
+fun weekdayIndex(day: Long): Int = Math.floorMod(day + 4, 7L).toInt()

@@ -51,4 +51,25 @@ interface QuranDao {
 
     @Query("SELECT firstAyahId FROM surahs WHERE id = :surahId")
     suspend fun firstAyahId(surahId: Int): Int?
+
+    @Query("SELECT * FROM ayahs WHERE id = :id")
+    suspend fun getAyah(id: Int): AyahEntity?
+
+    @Query("SELECT ayahCount FROM surahs WHERE id = :surahId")
+    suspend fun surahAyahCount(surahId: Int): Int?
+
+    @Query("SELECT MIN(id) FROM ayahs WHERE page = :page")
+    suspend fun minAyahIdOnPage(page: Int): Int?
+
+    @Query("SELECT MAX(id) FROM ayahs WHERE page = :page")
+    suspend fun maxAyahIdOnPage(page: Int): Int?
+
+    @Query("SELECT * FROM ayahs ORDER BY id")
+    suspend fun allAyahs(): List<AyahEntity>
+
+    @Query("SELECT * FROM ayahs WHERE id IN (:ids) ORDER BY id")
+    suspend fun ayahsByIds(ids: List<Int>): List<AyahEntity>
+
+    @Query("SELECT * FROM ayahs WHERE surahId = :surahId AND ayahNumber BETWEEN :from AND :to ORDER BY id")
+    suspend fun ayahsInRange(surahId: Int, from: Int, to: Int): List<AyahEntity>
 }

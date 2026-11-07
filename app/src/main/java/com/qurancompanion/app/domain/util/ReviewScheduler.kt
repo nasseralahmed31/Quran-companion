@@ -1,0 +1,88 @@
+package com.qurancompanion.app.domain.util
+
+import com.qurancompanion.app.domain.model.MasteryLevel
+import com.qurancompanion.app.domain.model.ReviewRating
+import com.qurancompanion.app.domain.model.ReviewStatus
+import kotlin.math.roundToInt
+
+data class ScheduleState(
+    val intervalDays: Int,
+    val ease: Double,
+    val repetitions: Int,
+    val lapses: Int,
+)
+
+/** Spaced-repetition scheduling (SM-2 inspired). Pure functions, covered by unit tests. */
+object ReviewScheduler {
+    const val MIN_EASE = 1.3
+    const val MAX_EASE = 2.8
+    const val MAX_INTERVAL = 365
+
+    fun initial() = ScheduleState(intervalDays = 1, ease = 2.3, repetitions = 0, lapses = 0)
+
+    /** First review: the day after memorizing (3 days if already mastered), never in the past. */
+    fun firstDueDay(memorizedOn: Long, mastery: MasteryLevel, today: Long): Long {
+        val base = memorizedOn + if (mastery == MasteryLevel.MASTERED) 3 else 1
+        return maxOf(base, today)
+    }
+
+    /** Many mistakes override a good self-rating. */
+    fun effectiveRating(rating: ReviewRating, errors: Int): ReviewRating = when {
+        errors >= 5 -> ReviewRating.WEAK
+        errors >= 3 && rating.ordinal < ReviewRating.AVERAGE.ordinal -> ReviewRating.AVERAGE
+        else -> rating
+    }
+
+    fun next(s: ScheduleState, rating: ReviewRating): ScheduleState {
+        val updated = when (rating) {
+            ReviewRating.EXCELLENT -> {
+                val reps = s.repetitions + 1
+                val interval = when (reps) {
+                    1 -> 3
+                    2 -> 7
+                    else -> maxOf(s.intervalDays + 1, (s.intervalDays * s.ease).roundToInt())
+                }
+                s.copy(intervalDays = interval, ease = minOf(MAX_EASE, s.ease + 0.1), repetitions = reps)
+            }
+            ReviewRating.GOOD -> {
+                val reps = s.repetitions + 1
+                val interval = when (reps) {
+                    1 -> 2
+                    2 -> 5
+                    else -> maxOf(s.intervalDays + 1, (s.intervalDays * s.ease * 0.85).roundToInt())
+                }
+                s.copy(intervalDays = interval, repetitions = reps)
+            }
+            ReviewRating.AVERAGE -> s.copy(
+                intervalDays = maxOf(1, (s.intervalDays * 0.6).roundToInt()),
+                ease = maxOf(MIN_EASE, s.ease - 0.1),
+            )
+            ReviewRating.WEAK -> s.copy(
+                intervalDays = 1,
+                ease = maxOf(MIN_EASE, s.ease - 0.2),
+                repetitions = 0,
+                lapses = s.lapses + 1,
+            )
+        }
+        return updated.copy(intervalDays = updated.intervalDays.coerceIn(1, MAX_INTERVAL))
+    }
+
+    fun masteryAfter(rating: ReviewRating, repetitions: Int): MasteryLevel = when (rating) {
+        ReviewRating.EXCELLENT -> if (repetitions >= 3) MasteryLevel.MASTERED else MasteryLevel.GOOD
+        ReviewRating.GOOD -> MasteryLevel.GOOD
+        ReviewRating.AVERAGE -> MasteryLevel.NEEDS_REVIEW
+        ReviewRating.WEAK -> MasteryLevel.WEAK
+    }
+
+    /** Recommend re-memorizing when a passage keeps failing. */
+    fun suggestRememorize(rating: ReviewRating, state: ScheduleState, errors: Int, previous: MasteryLevel): Boolean =
+        rating == ReviewRating.WEAK && (state.lapses >= 2 || errors >= 5 || previous == MasteryLevel.WEAK)
+
+    fun statusOf(next: Long, last: Long, today: Long): ReviewStatus = when {
+        next < today -> ReviewStatus.OVERDUE
+        next == today -> ReviewStatus.DUE_TODAY
+        last == today -> ReviewStatus.DONE
+        next - today <= 7 -> ReviewStatus.UPCOMING
+        else -> ReviewStatus.LATER
+    }
+}

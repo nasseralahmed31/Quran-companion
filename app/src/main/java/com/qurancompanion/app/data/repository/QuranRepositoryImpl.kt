@@ -32,6 +32,20 @@ class QuranRepositoryImpl(
     override suspend fun ayahId(surahId: Int, ayahNumber: Int): Int? = dao.ayahId(surahId, ayahNumber)
 
     override suspend fun pageOfAyah(surahId: Int, ayahNumber: Int): Int? = dao.pageOfAyah(surahId, ayahNumber)
+
+    override suspend fun getAyah(id: Int): Ayah? = dao.getAyah(id)?.toDomain()
+
+    override suspend fun ayahsOfRange(surahId: Int, from: Int, to: Int): List<Ayah> =
+        dao.ayahsInRange(surahId, from, to).map { it.toDomain() }
+
+    override suspend fun allAyahs(): List<Ayah> = dao.allAyahs().map { it.toDomain() }
+
+    override suspend fun ayahIdRangeOfPages(fromPage: Int, toPage: Int): Pair<Int, Int>? {
+        if (fromPage < 1 || toPage < fromPage) return null
+        val first = dao.minAyahIdOnPage(fromPage) ?: return null
+        val last = dao.maxAyahIdOnPage(toPage) ?: return null
+        return first to last
+    }
 }
 
 private fun SurahEntity.toDomain() =
