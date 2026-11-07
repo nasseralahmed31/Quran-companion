@@ -20,10 +20,20 @@ object ReviewScheduler {
 
     fun initial() = ScheduleState(intervalDays = 1, ease = 2.3, repetitions = 0, lapses = 0)
 
-    /** First review: the day after memorizing (3 days if already mastered), never in the past. */
+    /**
+     * First review date. Passages that are weak / need review are due as soon as possible (the day
+     * after memorizing, or today for older records); passages in good shape are spaced further
+     * out, so a backlog never puts confident passages on the same day as the ones that need work.
+     */
     fun firstDueDay(memorizedOn: Long, mastery: MasteryLevel, today: Long): Long {
-        val base = memorizedOn + if (mastery == MasteryLevel.MASTERED) 3 else 1
-        return maxOf(base, today)
+        val offset: Int
+        val floor: Int
+        when (mastery) {
+            MasteryLevel.WEAK, MasteryLevel.NEEDS_REVIEW -> { offset = 1; floor = 0 }
+            MasteryLevel.MASTERED -> { offset = 4; floor = 2 }
+            else -> { offset = 2; floor = 1 }
+        }
+        return maxOf(memorizedOn + offset, today + floor)
     }
 
     /** Many mistakes override a good self-rating. */

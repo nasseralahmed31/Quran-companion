@@ -21,6 +21,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.qurancompanion.app.domain.model.QuizType
 import com.qurancompanion.app.ui.achievements.AchievementsScreen
+import com.qurancompanion.app.ui.backup.BackupScreen
 import com.qurancompanion.app.ui.activity.ActivityLogScreen
 import com.qurancompanion.app.ui.goals.GoalFormScreen
 import com.qurancompanion.app.ui.goals.GoalsScreen
@@ -29,12 +30,12 @@ import com.qurancompanion.app.ui.map.MapScreen
 import com.qurancompanion.app.ui.memorize.MemorizeFormScreen
 import com.qurancompanion.app.ui.memorize.MemorizeScreen
 import com.qurancompanion.app.ui.more.MoreScreen
-import com.qurancompanion.app.ui.placeholder.PlaceholderScreen
 import com.qurancompanion.app.ui.quiz.QuizScreen
 import com.qurancompanion.app.ui.quran.QuranScreen
 import com.qurancompanion.app.ui.quran.ReaderScreen
 import com.qurancompanion.app.ui.review.ReviewScreen
 import com.qurancompanion.app.ui.review.ReviewSessionScreen
+import com.qurancompanion.app.ui.settings.SettingsScreen
 import com.qurancompanion.app.ui.similar.SimilarGroupScreen
 import com.qurancompanion.app.ui.similar.SimilarScreen
 import com.qurancompanion.app.ui.stats.StatsScreen
@@ -190,14 +191,8 @@ fun AppRoot() {
             composable(Routes.ACHIEVEMENTS) { AchievementsScreen(onBack = back) }
             composable(Routes.ACTIVITY) { ActivityLogScreen(onBack = back) }
 
-            // Not built yet: notifications/settings and backup (phase 7).
-            MoreDestinations
-                .filter { it.route == Routes.SETTINGS || it.route == Routes.BACKUP }
-                .forEach { dest ->
-                    composable(dest.route) {
-                        PlaceholderScreen(dest.label, dest.phase, dest.icon, onBack = back)
-                    }
-                }
+            composable(Routes.SETTINGS) { SettingsScreen(onBack = back) }
+            composable(Routes.BACKUP) { BackupScreen(onBack = back) }
         }
     }
 }

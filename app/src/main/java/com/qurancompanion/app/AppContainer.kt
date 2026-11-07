@@ -5,6 +5,7 @@ import com.qurancompanion.app.data.local.QuranDatabase
 import com.qurancompanion.app.data.quran.QuranImporter
 import com.qurancompanion.app.data.repository.AchievementEvaluator
 import com.qurancompanion.app.data.repository.AyahProgressUpdater
+import com.qurancompanion.app.data.repository.BackupRepositoryImpl
 import com.qurancompanion.app.data.repository.GoalRepositoryImpl
 import com.qurancompanion.app.data.repository.MemorizationRepositoryImpl
 import com.qurancompanion.app.data.repository.ProgressRepositoryImpl
@@ -14,6 +15,7 @@ import com.qurancompanion.app.data.repository.ReviewRepositoryImpl
 import com.qurancompanion.app.data.repository.SimilarityRepositoryImpl
 import com.qurancompanion.app.data.repository.StatsRepositoryImpl
 import com.qurancompanion.app.data.settings.DataStoreSettingsRepository
+import com.qurancompanion.app.domain.repository.BackupRepository
 import com.qurancompanion.app.domain.repository.GoalRepository
 import com.qurancompanion.app.domain.repository.MemorizationRepository
 import com.qurancompanion.app.domain.repository.ProgressRepository
@@ -23,6 +25,7 @@ import com.qurancompanion.app.domain.repository.ReviewRepository
 import com.qurancompanion.app.domain.repository.SettingsRepository
 import com.qurancompanion.app.domain.repository.SimilarityRepository
 import com.qurancompanion.app.domain.repository.StatsRepository
+import com.qurancompanion.app.notifications.ReminderScheduler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -65,4 +68,10 @@ class AppContainer(context: Context) {
     val quizRepository: QuizRepository by lazy { QuizRepositoryImpl(database, reviewRepository, similarityRepository) }
 
     val statsRepository: StatsRepository by lazy { StatsRepositoryImpl(database, progressRepository) }
+
+    val backupRepository: BackupRepository by lazy {
+        BackupRepositoryImpl(database, settingsRepository, progressUpdater)
+    }
+
+    val reminderScheduler: ReminderScheduler by lazy { ReminderScheduler(appContext) }
 }

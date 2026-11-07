@@ -1,11 +1,14 @@
 package com.qurancompanion.app.ui.theme
 
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
+import com.qurancompanion.app.domain.model.ColorTheme
+import com.qurancompanion.app.domain.model.ThemeMode
 
 private val DarkColors = darkColorScheme(
     primary = Emerald400,
@@ -39,13 +42,43 @@ private val LightColors = lightColorScheme(
     outline = Color(0xFFB4C2BC),
 )
 
+private fun darkScheme(theme: ColorTheme): ColorScheme = when (theme) {
+    ColorTheme.EMERALD -> DarkColors
+    ColorTheme.SAPPHIRE -> DarkColors.copy(
+        primary = Color(0xFF60A5FA), onPrimary = Color(0xFF0B2A5B),
+        primaryContainer = Color(0xFF1E3A8A), onPrimaryContainer = Color(0xFFDBEAFE),
+    )
+    ColorTheme.VIOLET -> DarkColors.copy(
+        primary = Color(0xFFA78BFA), onPrimary = Color(0xFF2E1065),
+        primaryContainer = Color(0xFF4C1D95), onPrimaryContainer = Color(0xFFEDE9FE),
+    )
+}
+
+private fun lightScheme(theme: ColorTheme): ColorScheme = when (theme) {
+    ColorTheme.EMERALD -> LightColors
+    ColorTheme.SAPPHIRE -> LightColors.copy(
+        primary = Color(0xFF1D4ED8), onPrimary = Color.White,
+        primaryContainer = Color(0xFFDBEAFE), onPrimaryContainer = Color(0xFF1E3A8A),
+    )
+    ColorTheme.VIOLET -> LightColors.copy(
+        primary = Color(0xFF6D28D9), onPrimary = Color.White,
+        primaryContainer = Color(0xFFEDE9FE), onPrimaryContainer = Color(0xFF4C1D95),
+    )
+}
+
 @Composable
 fun QuranCompanionTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
+    themeMode: ThemeMode = ThemeMode.SYSTEM,
+    colorTheme: ColorTheme = ColorTheme.EMERALD,
     content: @Composable () -> Unit,
 ) {
+    val dark = when (themeMode) {
+        ThemeMode.DARK -> true
+        ThemeMode.LIGHT -> false
+        ThemeMode.SYSTEM -> isSystemInDarkTheme()
+    }
     MaterialTheme(
-        colorScheme = if (darkTheme) DarkColors else LightColors,
+        colorScheme = if (dark) darkScheme(colorTheme) else lightScheme(colorTheme),
         typography = AppTypography,
         content = content,
     )

@@ -81,8 +81,25 @@ class ReviewSchedulerTest {
 
     @Test
     fun firstReviewIsNeverInThePast() {
-        assertEquals(11L, ReviewScheduler.firstDueDay(10, MasteryLevel.GOOD, 5))
-        assertEquals(50L, ReviewScheduler.firstDueDay(10, MasteryLevel.GOOD, 50))
-        assertEquals(13L, ReviewScheduler.firstDueDay(10, MasteryLevel.MASTERED, 5))
+        assertEquals(12L, ReviewScheduler.firstDueDay(10, MasteryLevel.GOOD, 5))
+        assertEquals(51L, ReviewScheduler.firstDueDay(10, MasteryLevel.GOOD, 50))
+        assertEquals(14L, ReviewScheduler.firstDueDay(10, MasteryLevel.MASTERED, 5))
+        assertEquals(50L, ReviewScheduler.firstDueDay(10, MasteryLevel.WEAK, 50))
+        assertEquals(11L, ReviewScheduler.firstDueDay(10, MasteryLevel.NEEDS_REVIEW, 5))
+    }
+
+    @Test
+    fun passagesNeedingReviewAreScheduledBeforeConfidentOnes() {
+        val today = 100L
+        val weak = ReviewScheduler.firstDueDay(today, MasteryLevel.WEAK, today)
+        val needs = ReviewScheduler.firstDueDay(today, MasteryLevel.NEEDS_REVIEW, today)
+        val good = ReviewScheduler.firstDueDay(today, MasteryLevel.GOOD, today)
+        val mastered = ReviewScheduler.firstDueDay(today, MasteryLevel.MASTERED, today)
+        assertTrue(weak < good && needs < good && good < mastered)
+        // A backlog recorded long ago: what needs review is due today, the rest later.
+        val oldWeak = ReviewScheduler.firstDueDay(10, MasteryLevel.WEAK, today)
+        val oldGood = ReviewScheduler.firstDueDay(10, MasteryLevel.GOOD, today)
+        assertEquals(today, oldWeak)
+        assertTrue(oldGood > oldWeak)
     }
 }

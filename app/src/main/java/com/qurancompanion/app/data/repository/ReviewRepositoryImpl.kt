@@ -10,10 +10,10 @@ import com.qurancompanion.app.domain.model.MemorizationState
 import com.qurancompanion.app.domain.model.ReviewItem
 import com.qurancompanion.app.domain.model.ReviewOutcome
 import com.qurancompanion.app.domain.model.ReviewRating
-import com.qurancompanion.app.domain.model.ReviewStatus
 import com.qurancompanion.app.domain.repository.ReviewRepository
 import com.qurancompanion.app.domain.util.DayClock
 import com.qurancompanion.app.domain.util.EpochDay
+import com.qurancompanion.app.domain.util.ReviewOrdering
 import com.qurancompanion.app.domain.util.ReviewScheduler
 import com.qurancompanion.app.domain.util.ScheduleState
 import kotlinx.coroutines.flow.Flow
@@ -29,13 +29,7 @@ class ReviewRepositoryImpl(
 
     override fun observeItems(): Flow<List<ReviewItem>> =
         combine(reviewDao.observeItems(), DayClock.ticker()) { rows, today ->
-            rows.map { it.toItem(today) }
-                .sortedWith(
-                    compareBy<ReviewItem> { statusPriority(it.status) }
-                        .thenByDescending { it.daysOverdue }
-                        .thenBy { masteryPriority(it.mastery) }
-                        .thenBy { it.nextReviewDay },
-                )
+            rows.map { it.toItem(today) }.sortedWith(ReviewOrdering.comparator)
         }
 
     override suspend fun getItem(entryId: Long): ReviewItem? =
@@ -102,22 +96,6 @@ class ReviewRepositoryImpl(
             schedule.copy(nextReviewDay = day, intervalDays = (day - today).toInt().coerceAtLeast(1)),
         )
     }
-}
-
-private fun statusPriority(s: ReviewStatus): Int = when (s) {
-    ReviewStatus.OVERDUE -> 0
-    ReviewStatus.DUE_TODAY -> 1
-    ReviewStatus.UPCOMING -> 2
-    ReviewStatus.DONE -> 3
-    ReviewStatus.LATER -> 4
-}
-
-private fun masteryPriority(m: MasteryLevel): Int = when (m) {
-    MasteryLevel.WEAK -> 0
-    MasteryLevel.NEEDS_REVIEW -> 1
-    MasteryLevel.GOOD -> 2
-    MasteryLevel.MASTERED -> 3
-    else -> 4
 }
 
 private fun ReviewItemRow.toItem(today: Long) = ReviewItem(

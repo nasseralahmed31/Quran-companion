@@ -70,6 +70,6 @@ val MoreDestinations = listOf(
     AppDestination(Routes.SIMILAR, "كاشف المتشابهات", Icons.Rounded.ContentCopy),
     AppDestination(Routes.ACHIEVEMENTS, "الإنجازات", Icons.Rounded.EmojiEvents),
     AppDestination(Routes.ACTIVITY, "سجل النشاط", Icons.Rounded.History),
-    AppDestination(Routes.SETTINGS, "الإعدادات", Icons.Rounded.Settings, "المرحلة السابعة"),
-    AppDestination(Routes.BACKUP, "النسخ الاحتياطي", Icons.Rounded.Backup, "المرحلة السابعة"),
+    AppDestination(Routes.SETTINGS, "الإعدادات والتذكيرات", Icons.Rounded.Settings),
+    AppDestination(Routes.BACKUP, "النسخ الاحتياطي والاستعادة", Icons.Rounded.Backup),
 )

@@ -34,6 +34,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.qurancompanion.app.domain.model.ReviewItem
 import com.qurancompanion.app.domain.model.ReviewStatus
+import com.qurancompanion.app.domain.util.ReviewOrdering
 import com.qurancompanion.app.ui.common.formatEpochDay
 import com.qurancompanion.app.ui.common.masteryColor
 import com.qurancompanion.app.ui.common.rangeLabel
@@ -52,6 +53,11 @@ fun statusColor(status: ReviewStatus): Color = when (status) {
     ReviewStatus.LATER -> MaterialTheme.colorScheme.onSurfaceVariant
 }
 
+private sealed interface ReviewRow {
+    data class Header(val group: Int) : ReviewRow
+    data class Entry(val item: ReviewItem) : ReviewRow
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ReviewScreen(
@@ -67,6 +73,7 @@ fun ReviewScreen(
     val dueNow = remember(items) {
         items.filter { it.status == ReviewStatus.OVERDUE || it.status == ReviewStatus.DUE_TODAY }
     }
+    val needsFirst = remember(dueNow) { dueNow.count { ReviewOrdering.needsReview(it.mastery) } }
     val shown = remember(items, filter) {
         when (filter) {
             0 -> items.filter { it.status == ReviewStatus.OVERDUE || it.status == ReviewStatus.DUE_TODAY }
@@ -74,6 +81,20 @@ fun ReviewScreen(
             2 -> items.filter { it.status == ReviewStatus.DONE }
             else -> items
         }
+    }
+    // The list is already ordered (needs-review first); headers just mark where each section starts.
+    val rows = remember(shown) {
+        val out = mutableListOf<ReviewRow>()
+        var last = -1
+        for (item in shown) {
+            val group = ReviewOrdering.group(item)
+            if (group != last) {
+                out.add(ReviewRow.Header(group))
+                last = group
+            }
+            out.add(ReviewRow.Entry(item))
+        }
+        out
     }
 
     LazyColumn(
@@ -89,7 +110,12 @@ fun ReviewScreen(
                     if (dueNow.isEmpty()) {
                         "لا توجد مراجعات مستحقة الآن."
                     } else {
-                        "${dueNow.size.toArabicIndic()} مقطع (${dueNow.sumOf { it.ayahCount }.toArabicIndic()} آية) بانتظار المراجعة، مرتبة بالأولوية."
+                        "${dueNow.size.toArabicIndic()} مقطع (${dueNow.sumOf { it.ayahCount }.toArabicIndic()} آية) بانتظار المراجعة" +
+                            if (needsFirst > 0) {
+                                "، منها ${needsFirst.toArabicIndic()} تحتاج مراجعة وتأتي في أول القائمة."
+                            } else {
+                                "."
+                            }
                     },
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -117,7 +143,7 @@ fun ReviewScreen(
                 )
             }
         }
-        if (shown.isEmpty()) {
+        if (rows.isEmpty()) {
             item {
                 Text(
                     if (items.isEmpty()) {
@@ -130,13 +156,25 @@ fun ReviewScreen(
                 )
             }
         }
-        items(shown, key = { it.entryId }) { item ->
-            ReviewCard(
-                item = item,
-                surahName = names[item.surahId].orEmpty(),
-                onStart = { onStart(item.entryId) },
-                onReschedule = { rescheduleTarget = item },
-            )
+        items(
+            rows,
+            key = { row ->
+                when (row) {
+                    is ReviewRow.Header -> "header-${row.group}"
+                    is ReviewRow.Entry -> "entry-${row.item.entryId}"
+                }
+            },
+        ) { row ->
+            when (row) {
+                is ReviewRow.Header -> SectionHeader(row.group)
+                is ReviewRow.Entry -> ReviewCard(
+                    item = row.item,
+                    surahName = names[row.item.surahId].orEmpty(),
+                    highlight = ReviewOrdering.group(row.item) == ReviewOrdering.GROUP_NEEDS_REVIEW,
+                    onStart = { onStart(row.item.entryId) },
+                    onReschedule = { rescheduleTarget = row.item },
+                )
+            }
         }
     }
 
@@ -152,8 +190,43 @@ fun ReviewScreen(
 }
 
 @Composable
-private fun ReviewCard(item: ReviewItem, surahName: String, onStart: () -> Unit, onReschedule: () -> Unit) {
-    GlassCard(Modifier.fillMaxWidth()) {
+private fun SectionHeader(group: Int) {
+    Column(Modifier.padding(top = 4.dp)) {
+        Text(
+            ReviewOrdering.sectionLabel(group),
+            style = MaterialTheme.typography.titleMedium,
+            color = if (group == ReviewOrdering.GROUP_NEEDS_REVIEW) {
+                MaterialTheme.colorScheme.error
+            } else {
+                MaterialTheme.colorScheme.onSurfaceVariant
+            },
+        )
+        if (group == ReviewOrdering.GROUP_NEEDS_REVIEW) {
+            Text(
+                "ضعيفة أو علّمتها «تحتاج مراجعة»؛ تُراجَع قبل غيرها حتى لو تأخر غيرها أكثر.",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+@Composable
+private fun ReviewCard(
+    item: ReviewItem,
+    surahName: String,
+    highlight: Boolean,
+    onStart: () -> Unit,
+    onReschedule: () -> Unit,
+) {
+    GlassCard(
+        Modifier.fillMaxWidth(),
+        borderColor = if (highlight) {
+            MaterialTheme.colorScheme.error.copy(alpha = 0.6f)
+        } else {
+            MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)
+        },
+    ) {
         Text("سورة $surahName", style = MaterialTheme.typography.titleMedium)
         Text(
             rangeLabel(item.fromAyah, item.toAyah),

@@ -139,25 +139,42 @@ class MemorizationRepositoryImpl(
         )
     }
 
-    /** Memorized records are reviewed; records still being learned are not scheduled. */
+    /**
+     * Memorized records are reviewed; records still being learned are not scheduled.
+     * A passage flagged as weak / needing review is pulled forward so it never waits behind
+     * passages that are in good shape.
+     */
     private suspend fun syncSchedule(entryId: Long, entry: MemorizationEntry) {
-        if (entry.state == MemorizationState.MEMORIZED) {
-            if (reviewDao.getSchedule(entryId) == null) {
-                val initial = ReviewScheduler.initial()
-                reviewDao.upsertSchedule(
-                    ReviewScheduleEntity(
-                        entryId = entryId,
-                        nextReviewDay = ReviewScheduler.firstDueDay(entry.memorizedOn, entry.displayMastery, EpochDay.today()),
-                        intervalDays = initial.intervalDays,
-                        ease = initial.ease,
-                        repetitions = initial.repetitions,
-                        lapses = initial.lapses,
-                        lastReviewDay = 0L,
-                    ),
-                )
-            }
-        } else {
+        if (entry.state != MemorizationState.MEMORIZED) {
             reviewDao.deleteSchedule(entryId)
+            return
+        }
+        val today = EpochDay.today()
+        val existing = reviewDao.getSchedule(entryId)
+        if (existing == null) {
+            val initial = ReviewScheduler.initial()
+            reviewDao.upsertSchedule(
+                ReviewScheduleEntity(
+                    entryId = entryId,
+                    nextReviewDay = ReviewScheduler.firstDueDay(entry.memorizedOn, entry.displayMastery, today),
+                    intervalDays = initial.intervalDays,
+                    ease = initial.ease,
+                    repetitions = initial.repetitions,
+                    lapses = initial.lapses,
+                    lastReviewDay = 0L,
+                ),
+            )
+            return
+        }
+        val pullTo = when (entry.displayMastery) {
+            MasteryLevel.WEAK -> today
+            MasteryLevel.NEEDS_REVIEW -> today + 1
+            else -> null
+        }
+        if (pullTo != null && existing.nextReviewDay > pullTo) {
+            reviewDao.upsertSchedule(
+                existing.copy(nextReviewDay = pullTo, intervalDays = (pullTo - today).toInt().coerceAtLeast(1)),
+            )
         }
     }
 }

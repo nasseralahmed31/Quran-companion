@@ -1,0 +1,37 @@
+package com.qurancompanion.app.domain.model
+
+enum class ThemeMode(val label: String) {
+    SYSTEM("حسب النظام"),
+    LIGHT("نهاري"),
+    DARK("ليلي"),
+}
+
+enum class ColorTheme(val label: String) {
+    EMERALD("الزمردي"),
+    SAPPHIRE("الياقوتي"),
+    VIOLET("البنفسجي"),
+}
+
+enum class ReminderType(
+    val label: String,
+    val description: String,
+    val defaultHour: Int,
+    val defaultMinute: Int,
+) {
+    MEMORIZE("تذكير الحفظ", "تذكير يومي بموعد الحفظ، ولا يصل إن سجّلت حفظًا اليوم", 17, 0),
+    REVIEW("تذكير المراجعة", "يصل عند وجود آيات مستحقة للمراجعة", 19, 0),
+    OVERDUE("تنبيه المراجعات المتأخرة", "يصل عند وجود مقاطع تأخرت مراجعتها", 9, 0),
+    GOAL("هدف اليوم", "يصل إن لم تُكمل هدفك اليومي", 21, 0),
+}
+
+data class ReminderSetting(val enabled: Boolean, val hour: Int, val minute: Int)
+
+data class AppSettings(
+    val themeMode: ThemeMode = ThemeMode.SYSTEM,
+    val colorTheme: ColorTheme = ColorTheme.EMERALD,
+    val dailyTargetAyahs: Int = 0,
+    val reminders: Map<ReminderType, ReminderSetting> =
+        ReminderType.entries.associateWith { ReminderSetting(false, it.defaultHour, it.defaultMinute) },
+)
+
+data class BackupSummary(val entries: Int, val reviewSessions: Int, val goals: Int)

@@ -39,6 +39,7 @@ abstract class QuranDatabase : RoomDatabase() {
     abstract fun planningDao(): PlanningDao
     abstract fun insightsDao(): InsightsDao
     abstract fun statsDao(): StatsDao
+    abstract fun backupDao(): BackupDao
 
     companion object {
         /** Adds review scheduling, goals, similar-ayah data, confusions and quiz history. */
@@ -81,11 +82,15 @@ abstract class QuranDatabase : RoomDatabase() {
                 )
                 db.execSQL("CREATE INDEX IF NOT EXISTS `index_quiz_results_day` ON `quiz_results` (`day`)")
 
-                // Records memorized in phase 3 enter the review schedule, due from today at the earliest.
+                // Records memorized in phase 3 enter the review schedule: weak ones first, confident ones later.
                 val today = EpochDay.today()
                 db.execSQL(
                     "INSERT INTO review_schedules (entryId, nextReviewDay, intervalDays, ease, repetitions, lapses, lastReviewDay) " +
-                        "SELECT id, MAX(memorizedOn + 1, $today), 1, 2.3, 0, 0, 0 FROM memorization_entries WHERE state = 'MEMORIZED'",
+                        "SELECT id, CASE " +
+                        "WHEN mastery IN ('WEAK', 'NEEDS_REVIEW') THEN MAX(memorizedOn + 1, $today) " +
+                        "WHEN mastery = 'MASTERED' THEN MAX(memorizedOn + 4, $today + 2) " +
+                        "ELSE MAX(memorizedOn + 2, $today + 1) END, 1, 2.3, 0, 0, 0 " +
+                        "FROM memorization_entries WHERE state = 'MEMORIZED'",
                 )
             }
         }
