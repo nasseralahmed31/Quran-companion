@@ -1,4 +1,3 @@
-
 package com.qurancompanion.app.ui.review
 
 import androidx.compose.foundation.layout.Arrangement
@@ -46,253 +45,118 @@ import com.qurancompanion.app.ui.theme.rememberQuranFontFamily
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ReviewSessionScreen(
-    entryId: Long,
-    onDone: () -> Unit,
-    onEditEntry: (Long) -> Unit
-) {
+fun ReviewSessionScreen(entryId: Long, onDone: () -> Unit, onEditEntry: (Long) -> Unit) {
     val vm: ReviewSessionViewModel = viewModel(
         key = "review_session_$entryId",
         factory = ReviewSessionViewModel.factory(entryId),
     )
-
     val s by vm.state.collectAsStateWithLifecycle()
     val fontFamily = rememberQuranFontFamily()
     val markerColor = MaterialTheme.colorScheme.secondary
 
-    Column(
-        Modifier
-            .fillMaxSize()
-            .statusBarsPadding()
-            .imePadding()
-    ) {
+    Column(Modifier.fillMaxSize().statusBarsPadding().imePadding()) {
         ScreenHeader("مراجعة مقطع", onDone)
-
         val item = s.item
-
         when {
-            s.loading -> {
-                CircularProgressIndicator(
-                    Modifier.padding(24.dp)
-                )
-            }
+            s.loading -> CircularProgressIndicator(Modifier.padding(24.dp))
+            s.missing || item == null -> Text("هذا المقطع لم يعد في جدول المراجعة.", modifier = Modifier.padding(16.dp))
+            else -> Column(
+                Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp),
+            ) {
+                GlassCard(Modifier.fillMaxWidth()) {
+                    Text("سورة ${s.surahName}", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        rangeLabel(item.fromAyah, item.toAyah),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Text(
+                        "اقرأ المقطع من حفظك أولًا، ثم اكشف النص للتحقق.",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.secondary,
+                        modifier = Modifier.padding(top = 6.dp),
+                    )
+                }
+                OutlinedButton(onClick = vm::reveal, modifier = Modifier.fillMaxWidth()) {
+                    Text(if (s.revealed) "إخفاء النص" else "إظهار النص")
+                }
+                if (s.revealed) {
+                    Text(
+                        text = flowingAyahText(s.ayahs, markerColor),
+                        fontSize = 24.sp,
+                        lineHeight = 46.sp,
+                        fontFamily = fontFamily,
+                        textAlign = TextAlign.Justify,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
 
-            s.missing || item == null -> {
-                Text(
-                    "هذا المقطع لم يعد في جدول المراجعة.",
-                    modifier = Modifier.padding(16.dp)
-                )
-            }
-
-            else -> {
-                Column(
-                    Modifier
-                        .fillMaxSize()
-                        .verticalScroll(rememberScrollState())
-                        .padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(14.dp),
-                ) {
+                if (s.outcome == null) {
+                    Text("كيف كان أداؤك؟", style = MaterialTheme.typography.titleMedium)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        ReviewRating.entries.forEach { r ->
+                            FilterChip(selected = s.rating == r, onClick = { vm.setRating(r) }, label = { Text(r.label) })
+                        }
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("عدد الأخطاء", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+                        IconButton(onClick = { vm.changeErrors(-1) }) { Icon(Icons.Rounded.Remove, contentDescription = "إنقاص") }
+                        Text(s.errors.toArabicIndic(), style = MaterialTheme.typography.titleMedium)
+                        IconButton(onClick = { vm.changeErrors(1) }) { Icon(Icons.Rounded.Add, contentDescription = "زيادة") }
+                    }
+                    OutlinedTextField(
+                        value = s.note,
+                        onValueChange = vm::setNote,
+                        modifier = Modifier.fillMaxWidth(),
+                        minLines = 2,
+                        label = { Text("ملاحظات (اختياري)") },
+                    )
+                    NumberField(
+                        s.manualDays, vm::setManualDays,
+                        "تحديد موعد المراجعة القادمة يدويًا: بعد كم يوم؟ (اختياري)",
+                        Modifier.fillMaxWidth(), maxLength = 3,
+                    )
+                    s.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                    Button(onClick = vm::save, enabled = !s.saving, modifier = Modifier.fillMaxWidth()) {
+                        Text("حفظ المراجعة")
+                    }
+                } else {
+                    val outcome = s.outcome
                     GlassCard(Modifier.fillMaxWidth()) {
+                        Text("تم تسجيل المراجعة", style = MaterialTheme.typography.titleMedium)
                         Text(
-                            "سورة ${s.surahName}",
-                            style = MaterialTheme.typography.titleMedium
+                            "المراجعة القادمة: ${formatEpochDay(outcome.nextReviewDay)} (بعد ${outcome.intervalDays.toArabicIndic()} يوم)",
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.padding(top = 4.dp),
                         )
-
                         Text(
-                            rangeLabel(item.fromAyah, item.toAyah),
+                            "مستوى الإتقان الآن: ${outcome.newMastery.label}",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
-
-                        Text(
-                            "اقرأ المقطع من حفظك أولًا، ثم اكشف النص للتحقق.",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.secondary,
-                            modifier = Modifier.padding(top = 6.dp),
-                        )
                     }
-
-                    OutlinedButton(
-                        onClick = vm::reveal,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text(
-                            if (s.revealed) "إخفاء النص"
-                            else "إظهار النص"
-                        )
-                    }
-
-                    if (s.revealed) {
-                        Text(
-                            text = flowingAyahText(s.ayahs, markerColor),
-                            fontSize = 24.sp,
-                            lineHeight = 46.sp,
-                            fontFamily = fontFamily,
-                            textAlign = TextAlign.Justify,
-                            modifier = Modifier.fillMaxWidth(),
-                        )
-                    }
-
-                    // إصلاح nullable: نحتفظ بالقيمة في متغير محلي
-                    val outcome = s.outcome
-
-                    if (outcome == null) {
-
-                        Text(
-                            "كيف كان أداؤك؟",
-                            style = MaterialTheme.typography.titleMedium
-                        )
-
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            ReviewRating.entries.forEach { r ->
-                                FilterChip(
-                                    selected = s.rating == r,
-                                    onClick = { vm.setRating(r) },
-                                    label = { Text(r.label) }
-                                )
-                            }
-                        }
-
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
+                    if (outcome.suggestRememorize) {
+                        GlassCard(Modifier.fillMaxWidth(), borderColor = MaterialTheme.colorScheme.error) {
+                            Text("يُنصح بإعادة حفظ هذا المقطع", style = MaterialTheme.typography.titleMedium)
                             Text(
-                                "عدد الأخطاء",
-                                style = MaterialTheme.typography.titleMedium,
-                                modifier = Modifier.weight(1f)
-                            )
-
-                            IconButton(
-                                onClick = { vm.changeErrors(-1) }
-                            ) {
-                                Icon(
-                                    Icons.Rounded.Remove,
-                                    contentDescription = "إنقاص"
-                                )
-                            }
-
-                            Text(
-                                s.errors.toArabicIndic(),
-                                style = MaterialTheme.typography.titleMedium
-                            )
-
-                            IconButton(
-                                onClick = { vm.changeErrors(1) }
-                            ) {
-                                Icon(
-                                    Icons.Rounded.Add,
-                                    contentDescription = "زيادة"
-                                )
-                            }
-                        }
-
-                        OutlinedTextField(
-                            value = s.note,
-                            onValueChange = vm::setNote,
-                            modifier = Modifier.fillMaxWidth(),
-                            minLines = 2,
-                            label = {
-                                Text("ملاحظات (اختياري)")
-                            },
-                        )
-
-                        NumberField(
-                            s.manualDays,
-                            vm::setManualDays,
-                            "تحديد موعد المراجعة القادمة يدويًا: بعد كم يوم؟ (اختياري)",
-                            Modifier.fillMaxWidth(),
-                            maxLength = 3,
-                        )
-
-                        s.error?.let {
-                            Text(
-                                it,
-                                color = MaterialTheme.colorScheme.error
-                            )
-                        }
-
-                        Button(
-                            onClick = vm::save,
-                            enabled = !s.saving,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text("حفظ المراجعة")
-                        }
-
-                    } else {
-
-                        // هنا أصبح outcome غير nullable بأمان
-                        GlassCard(Modifier.fillMaxWidth()) {
-
-                            Text(
-                                "تم تسجيل المراجعة",
-                                style = MaterialTheme.typography.titleMedium
-                            )
-
-                            Text(
-                                "المراجعة القادمة: ${
-                                    formatEpochDay(outcome.nextReviewDay)
-                                } (بعد ${
-                                    outcome.intervalDays.toArabicIndic()
-                                } يوم)",
-                                style = MaterialTheme.typography.bodyMedium,
-                                modifier = Modifier.padding(top = 4.dp),
-                            )
-
-                            Text(
-                                "مستوى الإتقان الآن: ${outcome.newMastery.label}",
+                                "تكرر الضعف فيه. يمكنك تعديل السجل وإعادته إلى «قيد الحفظ».",
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
-                        }
-
-                        if (outcome.suggestRememorize) {
-                            GlassCard(
-                                Modifier.fillMaxWidth(),
-                                borderColor = MaterialTheme.colorScheme.error
-                            ) {
-                                Text(
-                                    "يُنصح بإعادة حفظ هذا المقطع",
-                                    style = MaterialTheme.typography.titleMedium
-                                )
-
-                                Text(
-                                    "تكرر الضعف فيه. يمكنك تعديل السجل وإعادته إلى «قيد الحفظ».",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-
-                                OutlinedButton(
-                                    onClick = {
-                                        onEditEntry(entryId)
-                                    },
-                                    modifier = Modifier.padding(top = 8.dp)
-                                ) {
-                                    Text("فتح السجل للتعديل")
-                                }
+                            OutlinedButton(onClick = { onEditEntry(entryId) }, modifier = Modifier.padding(top = 8.dp)) {
+                                Text("فتح السجل للتعديل")
                             }
                         }
-
-                        Button(
-                            onClick = onDone,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text("تم")
-                        }
                     }
+                    Button(onClick = onDone, modifier = Modifier.fillMaxWidth()) { Text("تم") }
                 }
             }
         }
     }
 
     val achievements = s.outcome?.newAchievements.orEmpty()
-
     if (achievements.isNotEmpty()) {
-        AchievementUnlockedDialog(
-            achievements,
-            onDismiss = onDone
-        )
+        AchievementUnlockedDialog(achievements, onDismiss = onDone)
     }
 }

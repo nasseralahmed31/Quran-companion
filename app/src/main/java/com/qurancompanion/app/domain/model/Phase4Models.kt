@@ -148,6 +148,8 @@ data class StatsOverview(
     val masteryAyahs: Map<MasteryLevel, Int>,
     val activeDays: Set<Long>,
     val today: Long,
+    val paceAyahsPerDay: Double = 0.0,
+    val projectedKhatmDay: Long? = null,
 )
 
 enum class MapStatus { MASTERED, NEEDS_REVIEW, WEAK, NOT_MEMORIZED }

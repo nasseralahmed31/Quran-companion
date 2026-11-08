@@ -30,6 +30,8 @@ data class QuranMetadata(
     val pages: List<Position>,
 )
 
+data class MarkerPositions(val quarters: List<Position>, val sajdas: List<Position>)
+
 /**
  * Reads Tanzil's files verbatim: `quran-uthmani.txt` (sura|aya|text lines) and
  * `quran-data.xml` (surah, juz and page boundaries). Nothing is generated here;
@@ -92,6 +94,29 @@ object QuranSourceParser {
             .map { Position(it.intAttr("index"), it.intAttr("sura"), it.intAttr("aya")) }
             .sortedBy { it.index }
         return QuranMetadata(suras, juz, pages)
+    }
+
+    /**
+     * Hizb-quarter and sajda positions. They are optional decoration: anything unreadable gives
+     * empty lists instead of failing.
+     */
+    fun parseMarkers(input: InputStream): MarkerPositions {
+        val doc = try {
+            DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(input)
+        } catch (e: Exception) {
+            return MarkerPositions(emptyList(), emptyList())
+        }
+
+        fun positions(tag: String): List<Position> {
+            val nodes = doc.getElementsByTagName(tag)
+            return (0 until nodes.length).mapNotNull { i ->
+                val e = nodes.item(i) as? Element ?: return@mapNotNull null
+                val sura = e.getAttribute("sura").trim().toIntOrNull()
+                val aya = e.getAttribute("aya").trim().toIntOrNull()
+                if (sura == null || aya == null) null else Position(e.getAttribute("index").trim().toIntOrNull() ?: 0, sura, aya)
+            }
+        }
+        return MarkerPositions(positions("quarter").sortedBy { it.index }, positions("sajda"))
     }
 
     /** Throws [QuranDataException] listing every mismatch found (first few). */

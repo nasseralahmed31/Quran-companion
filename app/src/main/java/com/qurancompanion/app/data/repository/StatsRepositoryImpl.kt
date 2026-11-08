@@ -14,6 +14,7 @@ import com.qurancompanion.app.domain.model.SurahMapEntry
 import com.qurancompanion.app.domain.repository.ProgressRepository
 import com.qurancompanion.app.domain.repository.StatsRepository
 import com.qurancompanion.app.domain.util.DayClock
+import com.qurancompanion.app.domain.util.KhatmForecast
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 
@@ -91,6 +92,11 @@ class StatsRepositoryImpl(
         }
         counts[MasteryLevel.NEW] = (QuranConstants.TOTAL_AYAHS - counts.values.sum()).coerceAtLeast(0)
 
+        val firstDay = memorized.minOfOrNull { it.day }
+        val pace = KhatmForecast.pacePerDay(last30, firstDay, today)
+        val remaining = (QuranConstants.TOTAL_AYAHS - h.summary.memorizedAyahs).coerceAtLeast(0)
+        val daysToFinish = KhatmForecast.daysToFinish(remaining, pace)
+
         return StatsOverview(
             summary = h.summary,
             memorizationRecords = h.records,
@@ -105,6 +111,8 @@ class StatsRepositoryImpl(
             masteryAyahs = counts,
             activeDays = s.activeDays,
             today = today,
+            paceAyahsPerDay = pace,
+            projectedKhatmDay = daysToFinish?.let { today + it },
         )
     }
 }

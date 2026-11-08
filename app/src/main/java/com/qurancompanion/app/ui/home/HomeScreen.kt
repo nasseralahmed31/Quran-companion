@@ -52,6 +52,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.qurancompanion.app.domain.model.ProgressSummary
+import com.qurancompanion.app.ui.common.toArabicIndic
 import com.qurancompanion.app.ui.components.GlassCard
 import com.qurancompanion.app.ui.navigation.Routes
 import com.qurancompanion.app.ui.theme.Emerald700
@@ -64,6 +65,7 @@ fun HomeScreen(
     viewModel: HomeViewModel = viewModel(factory = HomeViewModel.Factory),
 ) {
     val summary by viewModel.summary.collectAsStateWithLifecycle()
+    val lastReadPage by viewModel.lastReadPage.collectAsStateWithLifecycle()
 
     LazyColumn(
         modifier = Modifier.fillMaxSize().statusBarsPadding(),
@@ -71,6 +73,9 @@ fun HomeScreen(
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         item { Header() }
+        if (lastReadPage > 0) {
+            item { ContinueReadingCard(lastReadPage) { onNavigate(Routes.reader(lastReadPage)) } }
+        }
         item { ProgressHero(summary) }
         item { StatsGrid(summary) }
         item { TodayGoalCard(summary) { onNavigate(Routes.MEMORIZE) } }
@@ -244,6 +249,23 @@ private fun QuickActions(onNavigate: (String) -> Unit) {
                         modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
                     )
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ContinueReadingCard(page: Int, onClick: () -> Unit) {
+    GlassCard(modifier = Modifier.fillMaxWidth(), onClick = onClick) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+            Icon(Icons.Rounded.AutoStories, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+            Column(Modifier.weight(1f)) {
+                Text("متابعة القراءة", style = MaterialTheme.typography.titleMedium)
+                Text(
+                    "آخر صفحة: ${page.toArabicIndic()}",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
         }
     }

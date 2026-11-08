@@ -17,6 +17,12 @@ interface SettingsRepository {
     suspend fun setColorTheme(theme: ColorTheme)
     suspend fun setReminder(type: ReminderType, setting: ReminderSetting)
 
+    /** Last mushaf page the user was reading (0 = none yet). */
+    suspend fun setLastReadPage(page: Int)
+
+    /** Adds the page to the bookmarks, or removes it if it is already there. */
+    suspend fun toggleBookmark(page: Int)
+
     /** Replaces every setting (used when restoring a backup). */
     suspend fun restore(settings: AppSettings)
 }

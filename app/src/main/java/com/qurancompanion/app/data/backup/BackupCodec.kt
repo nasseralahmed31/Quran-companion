@@ -26,6 +26,8 @@ data class BackupSettings(
     val themeMode: String,
     val colorTheme: String,
     val reminders: List<BackupReminder>,
+    val lastReadPage: Int = 0,
+    val bookmarks: List<Int> = emptyList(),
 )
 
 /** Everything personal. ayah_progress is derived from [entries] and rebuilt after a restore. */
@@ -56,6 +58,8 @@ object BackupCodec {
         settings.put("dailyTarget", d.settings.dailyTarget)
         settings.put("themeMode", d.settings.themeMode)
         settings.put("colorTheme", d.settings.colorTheme)
+        settings.put("lastReadPage", d.settings.lastReadPage)
+        settings.put("bookmarks", JSONArray(d.settings.bookmarks))
         settings.put(
             "reminders",
             array(d.settings.reminders) { r ->
@@ -152,6 +156,8 @@ object BackupCodec {
                     themeMode = s.optString("themeMode", ""),
                     colorTheme = s.optString("colorTheme", ""),
                     reminders = reminders,
+                    lastReadPage = s.optInt("lastReadPage", 0),
+                    bookmarks = s.optJSONArray("bookmarks")?.let { arr -> (0 until arr.length()).map { arr.getInt(it) } }.orEmpty(),
                 ),
                 entries = objects(root.getJSONArray("entries")).map {
                     MemorizationEntryEntity(

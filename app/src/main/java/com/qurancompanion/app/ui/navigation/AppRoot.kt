@@ -104,6 +104,8 @@ fun AppRoot() {
                     initialPage = entry.arguments?.getInt("page") ?: 1,
                     highlightAyahId = entry.arguments?.getInt("ayah") ?: 0,
                     onBack = back,
+                    onOpenSimilarGroup = { id -> navController.navigateTo(Routes.similarGroup(id)) },
+                    onOpenForm = { ayahId -> navController.navigateTo(Routes.memorizeForm(0L, ayahId, ayahId)) },
                 )
             }
 

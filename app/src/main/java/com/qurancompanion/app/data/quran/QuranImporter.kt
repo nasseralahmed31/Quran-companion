@@ -62,6 +62,18 @@ class QuranImporter(
         return QuranLoadResult.Ready
     }
 
+    /** Hizb-quarter and sajda positions from the bundled metadata; empty if unavailable. */
+    fun readMarkers(): MarkerPositions = try {
+        val present = context.assets.list(ASSET_DIR)?.toSet().orEmpty()
+        if (META_FILE !in present) {
+            MarkerPositions(emptyList(), emptyList())
+        } else {
+            context.assets.open("$ASSET_DIR/$META_FILE").use { QuranSourceParser.parseMarkers(it) }
+        }
+    } catch (e: Exception) {
+        MarkerPositions(emptyList(), emptyList())
+    }
+
     private fun build(
         text: List<RawAyah>,
         meta: QuranMetadata,

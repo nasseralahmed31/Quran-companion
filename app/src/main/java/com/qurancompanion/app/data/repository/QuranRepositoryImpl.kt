@@ -6,12 +6,15 @@ import com.qurancompanion.app.data.local.QuranDao
 import com.qurancompanion.app.data.local.SurahEntity
 import com.qurancompanion.app.data.quran.QuranImporter
 import com.qurancompanion.app.domain.model.Ayah
+import com.qurancompanion.app.domain.model.AyahMarker
 import com.qurancompanion.app.domain.model.Juz
 import com.qurancompanion.app.domain.model.QuranLoadResult
 import com.qurancompanion.app.domain.model.Surah
 import com.qurancompanion.app.domain.repository.QuranRepository
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.withContext
 
 class QuranRepositoryImpl(
     private val dao: QuranDao,
@@ -39,6 +42,25 @@ class QuranRepositoryImpl(
         dao.ayahsInRange(surahId, from, to).map { it.toDomain() }
 
     override suspend fun allAyahs(): List<Ayah> = dao.allAyahs().map { it.toDomain() }
+
+    @Volatile
+    private var markerCache: Map<Int, Set<AyahMarker>>? = null
+
+    override suspend fun markers(): Map<Int, Set<AyahMarker>> {
+        markerCache?.let { return it }
+        val positions = withContext(Dispatchers.IO) { importer.readMarkers() }
+        val result = HashMap<Int, MutableSet<AyahMarker>>()
+        for (p in positions.quarters) {
+            val id = dao.ayahId(p.sura, p.aya) ?: continue
+            result.getOrPut(id) { HashSet() }.add(AyahMarker.QUARTER)
+        }
+        for (p in positions.sajdas) {
+            val id = dao.ayahId(p.sura, p.aya) ?: continue
+            result.getOrPut(id) { HashSet() }.add(AyahMarker.SAJDA)
+        }
+        if (result.isNotEmpty()) markerCache = result // do not cache an empty answer given before import finished
+        return result
+    }
 
     override suspend fun ayahIdRangeOfPages(fromPage: Int, toPage: Int): Pair<Int, Int>? {
         if (fromPage < 1 || toPage < fromPage) return null

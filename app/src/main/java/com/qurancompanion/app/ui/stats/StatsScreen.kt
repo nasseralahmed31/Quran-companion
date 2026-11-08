@@ -31,6 +31,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.qurancompanion.app.domain.model.MasteryLevel
 import com.qurancompanion.app.domain.model.QuranConstants
 import com.qurancompanion.app.domain.model.StatsOverview
+import com.qurancompanion.app.ui.common.formatEpochDay
 import com.qurancompanion.app.ui.common.masteryColor
 import com.qurancompanion.app.ui.common.oneDecimal
 import com.qurancompanion.app.ui.common.toArabicIndic
@@ -101,6 +102,26 @@ private fun StatsContent(o: StatsOverview) {
                     pair.forEach { (label, value) -> StatTile(label, value, Modifier.weight(1f)) }
                     if (pair.size == 1) Box(Modifier.weight(1f))
                 }
+            }
+        }
+
+        item {
+            Section("ختم حفظ القرآن (تقدير)") {
+                val projected = o.projectedKhatmDay
+                Text(
+                    when {
+                        s.memorizedAyahs >= QuranConstants.TOTAL_AYAHS -> "أتممت حفظ القرآن كاملًا، بارك الله فيك."
+                        projected == null -> "يظهر التقدير بعد أن تسجّل حفظًا خلال آخر ٣٠ يومًا."
+                        else -> "بوتيرتك الحالية (${o.paceAyahsPerDay.oneDecimal()} آية في اليوم) يكتمل حفظك في ${formatEpochDay(projected, o.today)}."
+                    },
+                    style = MaterialTheme.typography.bodyLarge,
+                )
+                Text(
+                    "تقدير يتغير بتغير وتيرتك، وليس وعدًا.",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 6.dp),
+                )
             }
         }
 

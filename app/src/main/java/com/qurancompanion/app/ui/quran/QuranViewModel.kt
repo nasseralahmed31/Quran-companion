@@ -8,11 +8,15 @@ import com.qurancompanion.app.domain.model.Juz
 import com.qurancompanion.app.domain.model.QuranLoadResult
 import com.qurancompanion.app.domain.model.Surah
 import com.qurancompanion.app.domain.repository.QuranRepository
+import com.qurancompanion.app.domain.repository.SettingsRepository
 import com.qurancompanion.app.ui.common.appContainer
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 sealed interface QuranUiState {
@@ -21,7 +25,13 @@ sealed interface QuranUiState {
     data class Ready(val surahs: List<Surah>, val juz: List<Juz>) : QuranUiState
 }
 
-class QuranViewModel(private val repository: QuranRepository) : ViewModel() {
+class QuranViewModel(
+    private val repository: QuranRepository,
+    settings: SettingsRepository,
+) : ViewModel() {
+    val lastReadPage: StateFlow<Int> = settings.settings.map { it.lastReadPage }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0)
+
     private val _state = MutableStateFlow<QuranUiState>(QuranUiState.Loading)
     val state: StateFlow<QuranUiState> = _state.asStateFlow()
 
@@ -47,7 +57,10 @@ class QuranViewModel(private val repository: QuranRepository) : ViewModel() {
 
     companion object {
         val Factory = viewModelFactory {
-            initializer { QuranViewModel(appContainer().quranRepository) }
+            initializer {
+                val c = appContainer()
+                QuranViewModel(c.quranRepository, c.settingsRepository)
+            }
         }
     }
 }

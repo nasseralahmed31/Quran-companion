@@ -30,6 +30,8 @@ data class AppSettings(
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
     val colorTheme: ColorTheme = ColorTheme.EMERALD,
     val dailyTargetAyahs: Int = 0,
+    val lastReadPage: Int = 0,
+    val bookmarks: Set<Int> = emptySet(),
     val reminders: Map<ReminderType, ReminderSetting> =
         ReminderType.entries.associateWith { ReminderSetting(false, it.defaultHour, it.defaultMinute) },
 )

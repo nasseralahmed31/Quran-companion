@@ -33,6 +33,8 @@ class BackupRepositoryImpl(
                 themeMode = s.themeMode.name,
                 colorTheme = s.colorTheme.name,
                 reminders = s.reminders.map { (type, r) -> BackupReminder(type.name, r.enabled, r.hour, r.minute) },
+                lastReadPage = s.lastReadPage,
+                bookmarks = s.bookmarks.sorted(),
             ),
             entries = dao.entries(),
             schedules = dao.schedules(),
@@ -82,6 +84,8 @@ private fun BackupSettings.toAppSettings(): AppSettings {
         themeMode = runCatching { ThemeMode.valueOf(themeMode) }.getOrDefault(ThemeMode.SYSTEM),
         colorTheme = runCatching { ColorTheme.valueOf(colorTheme) }.getOrDefault(ColorTheme.EMERALD),
         dailyTargetAyahs = dailyTarget.coerceIn(0, QuranConstants.TOTAL_AYAHS),
+        lastReadPage = lastReadPage.coerceIn(0, QuranConstants.TOTAL_PAGES),
+        bookmarks = bookmarks.filter { it in 1..QuranConstants.TOTAL_PAGES }.toSet(),
         reminders = ReminderType.entries.associateWith { type ->
             val saved = reminders.firstOrNull { it.type == type.name }
             if (saved == null) {

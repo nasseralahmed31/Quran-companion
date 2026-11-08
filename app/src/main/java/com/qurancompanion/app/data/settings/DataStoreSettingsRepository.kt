@@ -8,6 +8,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.qurancompanion.app.domain.model.AppSettings
 import com.qurancompanion.app.domain.model.ColorTheme
@@ -27,6 +28,8 @@ class DataStoreSettingsRepository(private val context: Context) : SettingsReposi
     private val dailyTargetKey = intPreferencesKey("daily_target_ayahs")
     private val themeModeKey = stringPreferencesKey("theme_mode")
     private val colorThemeKey = stringPreferencesKey("color_theme")
+    private val lastReadKey = intPreferencesKey("last_read_page")
+    private val bookmarksKey = stringSetPreferencesKey("bookmarks")
 
     private fun enabledKey(type: ReminderType) = booleanPreferencesKey("reminder_${type.name}_enabled")
     private fun hourKey(type: ReminderType) = intPreferencesKey("reminder_${type.name}_hour")
@@ -42,6 +45,9 @@ class DataStoreSettingsRepository(private val context: Context) : SettingsReposi
             themeMode = p[themeModeKey]?.let { runCatching { ThemeMode.valueOf(it) }.getOrNull() } ?: ThemeMode.SYSTEM,
             colorTheme = p[colorThemeKey]?.let { runCatching { ColorTheme.valueOf(it) }.getOrNull() } ?: ColorTheme.EMERALD,
             dailyTargetAyahs = p[dailyTargetKey] ?: 0,
+            lastReadPage = (p[lastReadKey] ?: 0).coerceIn(0, QuranConstants.TOTAL_PAGES),
+            bookmarks = p[bookmarksKey].orEmpty().mapNotNull { it.toIntOrNull() }
+                .filter { it in 1..QuranConstants.TOTAL_PAGES }.toSet(),
             reminders = ReminderType.entries.associateWith { type ->
                 ReminderSetting(
                     enabled = p[enabledKey(type)] ?: false,
@@ -64,6 +70,19 @@ class DataStoreSettingsRepository(private val context: Context) : SettingsReposi
         context.settingsDataStore.edit { it[colorThemeKey] = theme.name }
     }
 
+    override suspend fun setLastReadPage(page: Int) {
+        context.settingsDataStore.edit { it[lastReadKey] = page.coerceIn(0, QuranConstants.TOTAL_PAGES) }
+    }
+
+    override suspend fun toggleBookmark(page: Int) {
+        if (page !in 1..QuranConstants.TOTAL_PAGES) return
+        context.settingsDataStore.edit { p ->
+            val current = p[bookmarksKey].orEmpty()
+            val key = page.toString()
+            p[bookmarksKey] = if (key in current) current - key else current + key
+        }
+    }
+
     override suspend fun setReminder(type: ReminderType, setting: ReminderSetting) {
         context.settingsDataStore.edit { p ->
             p[enabledKey(type)] = setting.enabled
@@ -77,6 +96,8 @@ class DataStoreSettingsRepository(private val context: Context) : SettingsReposi
             p[dailyTargetKey] = settings.dailyTargetAyahs.coerceIn(0, QuranConstants.TOTAL_AYAHS)
             p[themeModeKey] = settings.themeMode.name
             p[colorThemeKey] = settings.colorTheme.name
+            p[lastReadKey] = settings.lastReadPage.coerceIn(0, QuranConstants.TOTAL_PAGES)
+            p[bookmarksKey] = settings.bookmarks.filter { it in 1..QuranConstants.TOTAL_PAGES }.map { it.toString() }.toSet()
             ReminderType.entries.forEach { type ->
                 val r = settings.reminders[type] ?: return@forEach
                 p[enabledKey(type)] = r.enabled

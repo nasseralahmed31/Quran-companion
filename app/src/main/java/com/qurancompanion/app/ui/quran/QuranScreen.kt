@@ -106,11 +106,19 @@ private fun ReadyContent(
     val surahNames = remember(state.surahs) { state.surahs.associate { it.id to it.nameAr } }
     val filtered = remember(state.surahs, query) { filterSurahs(state.surahs, query) }
     val uriHandler = LocalUriHandler.current
+    val lastRead by viewModel.lastReadPage.collectAsStateWithLifecycle()
 
     LazyColumn(
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
+        if (lastRead > 0) {
+            item {
+                Button(onClick = { onOpenReader(lastRead, 0) }, modifier = Modifier.fillMaxWidth()) {
+                    Text("متابعة القراءة من صفحة ${lastRead.toArabicIndic()}")
+                }
+            }
+        }
         item { JumpCard(state.surahs, viewModel, onOpenReader) }
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

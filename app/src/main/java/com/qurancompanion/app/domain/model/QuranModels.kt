@@ -41,3 +41,6 @@ sealed interface QuranLoadResult {
     data class Invalid(val message: String) : QuranLoadResult
     data class Failed(val message: String) : QuranLoadResult
 }
+
+/** Extra marks shown in the mushaf on the ayah that starts a hizb quarter / carries a sajda. */
+enum class AyahMarker { QUARTER, SAJDA }
