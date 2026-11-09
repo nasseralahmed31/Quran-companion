@@ -30,6 +30,8 @@ data class MemorizationEntry(
     val state: MemorizationState,
     val mastery: MasteryLevel,
     val note: String = "",
+    /** Memorized before using the app: excluded from daily pace, streak and the khatm forecast. */
+    val isPrevious: Boolean = false,
 ) {
     val ayahCount: Int get() = toAyah - fromAyah + 1
 

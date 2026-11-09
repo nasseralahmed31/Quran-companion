@@ -27,7 +27,7 @@ class StatsRepositoryImpl(
     private val review = db.reviewDao()
     private val quran = db.quranDao()
 
-    private data class Head(val summary: ProgressSummary, val records: Int, val sessions: Int, val quizzes: Int)
+    private data class Head(val summary: ProgressSummary, val records: Int, val sessions: Int, val quizzes: Int, val previous: Int)
     private data class Series(
         val memorized: List<DayCountRow>,
         val reviewed: List<DayCountRow>,
@@ -41,7 +41,8 @@ class StatsRepositoryImpl(
             stats.observeEntryCount(),
             stats.observeReviewSessionCount(),
             stats.observeQuizCount(),
-        ) { summary, records, sessions, quizzes -> Head(summary, records, sessions, quizzes) }
+            stats.observePreviousCount(),
+        ) { summary, records, sessions, quizzes, previous -> Head(summary, records, sessions, quizzes, previous) }
         val series = combine(
             stats.observeMemorizedPerDay(),
             stats.observeReviewedPerDay(),
@@ -79,7 +80,7 @@ class StatsRepositoryImpl(
 
         val windowStart = today - 89
         val byDay = memorized.associate { it.day to it.total }
-        var running = memorized.filter { it.day < windowStart }.sumOf { it.total }
+        var running = h.previous + memorized.filter { it.day < windowStart }.sumOf { it.total }
         val cumulative = (windowStart..today).map { day ->
             running += byDay[day] ?: 0
             DayCount(day, running)
@@ -95,7 +96,9 @@ class StatsRepositoryImpl(
         val firstDay = memorized.minOfOrNull { it.day }
         val pace = KhatmForecast.pacePerDay(last30, firstDay, today)
         val remaining = (QuranConstants.TOTAL_AYAHS - h.summary.memorizedAyahs).coerceAtLeast(0)
-        val daysToFinish = KhatmForecast.daysToFinish(remaining, pace)
+        // A forecast from a few days of data would be wild; wait for at least a week of new memorization.
+        val enoughHistory = firstDay != null && today - firstDay + 1 >= 7
+        val daysToFinish = if (enoughHistory) KhatmForecast.daysToFinish(remaining, pace) else null
 
         return StatsOverview(
             summary = h.summary,

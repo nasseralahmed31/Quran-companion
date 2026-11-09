@@ -20,6 +20,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -114,10 +115,23 @@ fun MemorizeFormScreen(entryId: Long, presetStart: Int, presetEnd: Int, onDone: 
                     FormMode.RANGE -> RangeSummary(s.rangeSummary, "مقدار اليوم من خطة هدفك.")
                 }
 
-                Text("تاريخ الحفظ: ${formatEpochDay(s.epochDay)}", style = MaterialTheme.typography.titleMedium)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(onClick = { vm.shiftDay(-1) }) { Text("اليوم السابق") }
-                    OutlinedButton(onClick = { vm.shiftDay(1) }, enabled = s.epochDay < EpochDay.today()) { Text("اليوم التالي") }
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("حفظ سابق (منذ زمن)", style = MaterialTheme.typography.titleMedium)
+                        Text(
+                            "حفظته قبل استخدام التطبيق؛ يُحسب في نسبة حفظك لكنه لا يدخل في وتيرتك اليومية ولا سلسلة الالتزام ولا تقدير ختم الحفظ.",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Switch(checked = s.isPrevious, onCheckedChange = vm::onPrevious)
+                }
+                if (!s.isPrevious) {
+                    Text("تاريخ الحفظ: ${formatEpochDay(s.epochDay)}", style = MaterialTheme.typography.titleMedium)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(onClick = { vm.shiftDay(-1) }) { Text("اليوم السابق") }
+                        OutlinedButton(onClick = { vm.shiftDay(1) }, enabled = s.epochDay < EpochDay.today()) { Text("اليوم التالي") }
+                    }
                 }
 
                 Text("حالة الحفظ", style = MaterialTheme.typography.titleMedium)

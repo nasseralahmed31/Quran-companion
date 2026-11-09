@@ -137,6 +137,21 @@ fun SettingsScreen(
                 )
             }
 
+            Section("المراجعة") {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("إزاحة المواعيد تلقائيًا", style = MaterialTheme.typography.titleMedium)
+                        Text(
+                            "إن فاتتك أيام لم تراجع فيها، تُنقل المراجعات المتأخرة إلى أيام قادمة حسب الأولوية (الأضعف أولًا) " +
+                                "وتتأخر بقية المواعيد بقدر الأيام الفائتة، فلا تتراكم عليك.",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Switch(checked = settings.autoShiftReviews, onCheckedChange = viewModel::setAutoShiftReviews)
+                }
+            }
+
             Section("حول") {
                 Text(
                     "نص القرآن: النص العثماني من مشروع تنزيل (tanzil.net). يعمل التطبيق دون إنترنت ودون حساب، وبياناتك على جهازك فقط.",

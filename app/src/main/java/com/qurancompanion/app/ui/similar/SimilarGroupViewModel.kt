@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
+import com.qurancompanion.app.data.similarity.ArabicText
 import com.qurancompanion.app.data.similarity.WordDiff
 import com.qurancompanion.app.domain.model.Ayah
 import com.qurancompanion.app.domain.repository.QuranRepository
@@ -16,7 +17,8 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-data class GroupMember(val ayah: Ayah, val words: List<WordDiff.Word>)
+/** [nextWord] is the word where this ayah leaves the opening that all the ayahs share. */
+data class GroupMember(val ayah: Ayah, val words: List<WordDiff.Word>, val nextWord: String)
 
 data class SimilarGroupState(
     val loading: Boolean = true,
@@ -24,6 +26,7 @@ data class SimilarGroupState(
     val members: List<GroupMember> = emptyList(),
     val surahNames: Map<Int, String> = emptyMap(),
     val memorized: Set<Int> = emptySet(),
+    val commonStart: String = "",
 )
 
 class SimilarGroupViewModel(
@@ -46,12 +49,20 @@ class SimilarGroupViewModel(
             }
             val ayahs = group.ayahIds.mapNotNull { quran.getAyah(it) }
             val diffs = WordDiff.highlight(ayahs.map { it.text })
+            val tokens = ayahs.map { ArabicText.tokenize(it.text) }
+            // How many opening words do all the ayahs share, and where does each one go its own way?
+            var prefix = tokens.firstOrNull()?.normalized?.size ?: 0
+            for (t in tokens.drop(1)) {
+                prefix = minOf(prefix, ArabicText.commonPrefixLength(tokens.first().normalized, t.normalized))
+            }
+            val commonStart = tokens.firstOrNull()?.original?.take(prefix)?.joinToString(" ").orEmpty()
             val names = quran.observeSurahs().first().associate { it.id to it.nameAr }
             _state.update {
                 it.copy(
                     loading = false,
-                    members = ayahs.mapIndexed { i, a -> GroupMember(a, diffs[i]) },
+                    members = ayahs.mapIndexed { i, a -> GroupMember(a, diffs[i], tokens[i].original.getOrNull(prefix).orEmpty()) },
                     surahNames = names,
+                    commonStart = commonStart,
                 )
             }
         }

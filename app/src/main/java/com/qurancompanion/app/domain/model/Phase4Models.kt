@@ -41,6 +41,7 @@ data class ReviewOutcome(
     val newMastery: MasteryLevel,
     val suggestRememorize: Boolean,
     val newAchievements: List<Achievement>,
+    val adaptationNote: String? = null,
 )
 
 // ---------- Goals ----------
@@ -108,6 +109,9 @@ enum class QuizType(val label: String, val description: String, val selfGraded: 
     COMPLETE("إكمال الآية", "تظهر بداية الآية وتكملها من حفظك", true),
     NEXT_AYAH("الآية التالية", "تُعرض آية وتختار الآية التي تليها", false),
     SIMILAR("المتشابهات", "تُعرض بداية آية لها متشابهات وتختار تكملتها الصحيحة", false),
+    SURAH_CHOICE("اختيار السورة الصحيحة", "تُعرض آية وتختار السورة التي هي منها", false),
+    RANDOM_START("ابدأ من هنا", "يختار التطبيق موضع بداية عشوائيًا من محفوظك وتتلو منه ثلاث آيات", true),
+    COMPREHENSIVE("اختبار عشوائي شامل", "يختار التطبيق موضعًا عشوائيًا من كامل محفوظك ويطلب منك متابعة الآيات التالية", true),
 }
 
 data class QuizQuestion(
@@ -162,3 +166,50 @@ data class SurahMapEntry(
     val status: MapStatus,
     val startPage: Int,
 )
+
+data class SimilarPair(val a: Int, val b: Int, val score: Double)
+
+// ---------- Daily wird and recitation khatmah ----------
+data class WirdToday(
+    val readPages: Int,
+    val readTarget: Int,
+    val readTargetFromKhatm: Boolean,
+    val memorizedAyahs: Int,
+    val memorizeTarget: Int,
+    val reviewedAyahs: Int,
+    val reviewTarget: Int,
+    /** The manual recitation target (the khatmah, when running, overrides [readTarget]). */
+    val manualReadTarget: Int = 0,
+) {
+    val hasAnyTarget: Boolean get() = readTarget > 0 || memorizeTarget > 0 || reviewTarget > 0
+    val isComplete: Boolean
+        get() = hasAnyTarget && readPages >= readTarget && memorizedAyahs >= memorizeTarget && reviewedAyahs >= reviewTarget
+}
+
+/** A plan to recite the whole mushaf (604 pages) within [days] days, counted by pages actually read. */
+data class KhatmState(
+    val startDay: Long,
+    val days: Int,
+    val pagesRead: Int,
+    val readToday: Int,
+    val today: Long,
+) {
+    val endDay: Long get() = startDay + days - 1
+    val totalPages: Int get() = QuranConstants.TOTAL_PAGES
+    val remainingPages: Int get() = (totalPages - pagesRead).coerceAtLeast(0)
+    val daysLeft: Int get() = GoalPlanner.daysLeft(endDay, today)
+
+    /** Pages to read today; constant through the day because today's reading is added back. */
+    val requiredToday: Int
+        get() = GoalPlanner.requiredPerDay((remainingPages + minOf(readToday, pagesRead)).coerceAtMost(totalPages), daysLeft)
+
+    val status: GoalStatus get() = GoalPlanner.status(pagesRead, totalPages, startDay, endDay, today)
+
+    /** The pages planned for today (even split of the mushaf over the days), or null once the period is over. */
+    val todayPlan: DayPlan?
+        get() = GoalPlanner.schedule(1, totalPages, days).firstOrNull { it.dayIndex == (today - startDay + 1).toInt() }
+
+    val fraction: Float get() = (pagesRead / totalPages.toFloat()).coerceIn(0f, 1f)
+}
+
+data class RolloverSummary(val overdueMoved: Int, val shiftDays: Int)

@@ -9,6 +9,7 @@ import com.qurancompanion.app.data.similarity.SimilarityEngine
 import com.qurancompanion.app.domain.model.Confusion
 import com.qurancompanion.app.domain.model.QuranConstants
 import com.qurancompanion.app.domain.model.SimilarGroup
+import com.qurancompanion.app.domain.model.SimilarPair
 import com.qurancompanion.app.domain.repository.SimilarityRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -81,6 +82,10 @@ class SimilarityRepositoryImpl(private val db: QuranDatabase) : SimilarityReposi
             .sortedWith(compareByDescending<SimilarGroup> { it.ayahIds.size }.thenBy { it.id })
         cachedGroups = cachedGroups + (minScore to groups)
         groups
+    }
+
+    override suspend fun loadPairs(minScore: Double): List<SimilarPair> = withContext(Dispatchers.Default) {
+        insights.allPairs().filter { it.score >= minScore }.map { SimilarPair(it.ayahA, it.ayahB, it.score) }
     }
 
     override fun observeConfusions(): Flow<List<Confusion>> =

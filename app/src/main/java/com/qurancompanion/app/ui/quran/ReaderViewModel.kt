@@ -14,6 +14,7 @@ import com.qurancompanion.app.domain.repository.MemorizationRepository
 import com.qurancompanion.app.domain.repository.QuranRepository
 import com.qurancompanion.app.domain.repository.SettingsRepository
 import com.qurancompanion.app.domain.repository.SimilarityRepository
+import com.qurancompanion.app.domain.repository.WirdRepository
 import com.qurancompanion.app.domain.util.EpochDay
 import com.qurancompanion.app.ui.common.appContainer
 import kotlinx.coroutines.CancellationException
@@ -31,6 +32,7 @@ class ReaderViewModel(
     private val memorization: MemorizationRepository,
     private val similarity: SimilarityRepository,
     private val settings: SettingsRepository,
+    private val wird: WirdRepository,
 ) : ViewModel() {
 
     val surahNames: StateFlow<Map<Int, String>> = quran.observeSurahs()
@@ -69,6 +71,19 @@ class ReaderViewModel(
         viewModelScope.launch { settings.setLastReadPage(page) }
     }
 
+    /** Counts [page] as read today. */
+    fun markRead(page: Int) {
+        viewModelScope.launch {
+            try {
+                wird.markRead(page)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // Reading is still fine if the log could not be written.
+            }
+        }
+    }
+
     fun toggleBookmark(page: Int) {
         viewModelScope.launch { settings.toggleBookmark(page) }
     }
@@ -104,7 +119,7 @@ class ReaderViewModel(
         val Factory = viewModelFactory {
             initializer {
                 val c = appContainer()
-                ReaderViewModel(c.quranRepository, c.memorizationRepository, c.similarityRepository, c.settingsRepository)
+                ReaderViewModel(c.quranRepository, c.memorizationRepository, c.similarityRepository, c.settingsRepository, c.wirdRepository)
             }
         }
     }

@@ -14,6 +14,7 @@ import com.qurancompanion.app.data.repository.QuranRepositoryImpl
 import com.qurancompanion.app.data.repository.ReviewRepositoryImpl
 import com.qurancompanion.app.data.repository.SimilarityRepositoryImpl
 import com.qurancompanion.app.data.repository.StatsRepositoryImpl
+import com.qurancompanion.app.data.repository.WirdRepositoryImpl
 import com.qurancompanion.app.data.settings.DataStoreSettingsRepository
 import com.qurancompanion.app.domain.repository.BackupRepository
 import com.qurancompanion.app.domain.repository.GoalRepository
@@ -25,6 +26,7 @@ import com.qurancompanion.app.domain.repository.ReviewRepository
 import com.qurancompanion.app.domain.repository.SettingsRepository
 import com.qurancompanion.app.domain.repository.SimilarityRepository
 import com.qurancompanion.app.domain.repository.StatsRepository
+import com.qurancompanion.app.domain.repository.WirdRepository
 import com.qurancompanion.app.notifications.ReminderScheduler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -52,7 +54,7 @@ class AppContainer(context: Context) {
     }
 
     val reviewRepository: ReviewRepository by lazy {
-        ReviewRepositoryImpl(database, progressUpdater, achievementEvaluator)
+        ReviewRepositoryImpl(database, progressUpdater, achievementEvaluator, settingsRepository)
     }
 
     val progressRepository: ProgressRepository by lazy {
@@ -71,6 +73,10 @@ class AppContainer(context: Context) {
 
     val backupRepository: BackupRepository by lazy {
         BackupRepositoryImpl(database, settingsRepository, progressUpdater)
+    }
+
+    val wirdRepository: WirdRepository by lazy {
+        WirdRepositoryImpl(database, settingsRepository, progressRepository)
     }
 
     val reminderScheduler: ReminderScheduler by lazy { ReminderScheduler(appContext) }

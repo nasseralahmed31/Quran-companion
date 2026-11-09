@@ -72,4 +72,7 @@ interface QuranDao {
 
     @Query("SELECT * FROM ayahs WHERE surahId = :surahId AND ayahNumber BETWEEN :from AND :to ORDER BY id")
     suspend fun ayahsInRange(surahId: Int, from: Int, to: Int): List<AyahEntity>
+
+    @Query("SELECT * FROM surahs ORDER BY id")
+    suspend fun allSurahs(): List<SurahEntity>
 }

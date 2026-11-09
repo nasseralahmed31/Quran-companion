@@ -12,6 +12,9 @@ data class ScheduleState(
     val lapses: Int,
 )
 
+/** One past review of a passage: how it went and how many mistakes were made. */
+data class ReviewSample(val rating: ReviewRating, val errors: Int)
+
 /** Spaced-repetition scheduling (SM-2 inspired). Pure functions, covered by unit tests. */
 object ReviewScheduler {
     const val MIN_EASE = 1.3
@@ -87,6 +90,43 @@ object ReviewScheduler {
     /** Recommend re-memorizing when a passage keeps failing. */
     fun suggestRememorize(rating: ReviewRating, state: ScheduleState, errors: Int, previous: MasteryLevel): Boolean =
         rating == ReviewRating.WEAK && (state.lapses >= 2 || errors >= 5 || previous == MasteryLevel.WEAK)
+
+    /**
+     * Interval multiplier from the recent history (newest first, this review included):
+     * repeated weak results or many mistakes shorten the next interval; a clean streak lengthens it.
+     */
+    fun historyFactor(recent: List<ReviewSample>): Double {
+        if (recent.isEmpty()) return 1.0
+        val window = recent.take(5)
+        val avgErrors = window.sumOf { it.errors } / window.size.toDouble()
+        val weak = window.count { it.rating == ReviewRating.WEAK }
+        return when {
+            weak >= 2 || avgErrors >= 3.0 -> 0.6
+            avgErrors >= 1.5 || (weak == 1 && window.size >= 2) -> 0.8
+            window.size >= 3 && avgErrors == 0.0 &&
+                window.all { it.rating == ReviewRating.EXCELLENT || it.rating == ReviewRating.GOOD } -> 1.15
+            else -> 1.0
+        }
+    }
+
+    /** Weak passages are capped to short intervals so they come back often. */
+    fun maxIntervalFor(mastery: MasteryLevel): Int = when (mastery) {
+        MasteryLevel.WEAK -> 2
+        MasteryLevel.NEEDS_REVIEW -> 6
+        else -> MAX_INTERVAL
+    }
+
+    fun adaptInterval(baseInterval: Int, factor: Double, mastery: MasteryLevel): Int =
+        (baseInterval * factor).roundToInt().coerceAtLeast(1).coerceAtMost(maxIntervalFor(mastery))
+
+    /** A short explanation for the user when the interval was adapted, or null when it was not. */
+    fun adaptationNote(factor: Double, baseInterval: Int, adapted: Int, mastery: MasteryLevel): String? = when {
+        adapted < (baseInterval * factor).roundToInt().coerceAtLeast(1) ->
+            "ثُبِّت الفاصل قصيرًا لأن المقطع ${mastery.label}، فيعود إليك أكثر."
+        factor < 1.0 -> "قُصِّر الفاصل لكثرة أخطائك في المراجعات الأخيرة."
+        factor > 1.0 -> "طُوِّل الفاصل لأنك راجعته بلا أخطاء في آخر مرات."
+        else -> null
+    }
 
     fun statusOf(next: Long, last: Long, today: Long): ReviewStatus = when {
         next < today -> ReviewStatus.OVERDUE

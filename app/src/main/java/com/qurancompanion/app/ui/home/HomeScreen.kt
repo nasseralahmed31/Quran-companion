@@ -52,6 +52,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.qurancompanion.app.domain.model.ProgressSummary
+import com.qurancompanion.app.domain.model.WirdToday
 import com.qurancompanion.app.ui.common.toArabicIndic
 import com.qurancompanion.app.ui.components.GlassCard
 import com.qurancompanion.app.ui.navigation.Routes
@@ -66,6 +67,7 @@ fun HomeScreen(
 ) {
     val summary by viewModel.summary.collectAsStateWithLifecycle()
     val lastReadPage by viewModel.lastReadPage.collectAsStateWithLifecycle()
+    val wirdToday by viewModel.wirdToday.collectAsStateWithLifecycle()
 
     LazyColumn(
         modifier = Modifier.fillMaxSize().statusBarsPadding(),
@@ -79,6 +81,7 @@ fun HomeScreen(
         item { ProgressHero(summary) }
         item { StatsGrid(summary) }
         item { TodayGoalCard(summary) { onNavigate(Routes.MEMORIZE) } }
+        item { WirdCard(wirdToday) { onNavigate(Routes.WIRD) } }
         item { ReviewCard(summary) { onNavigate(Routes.REVIEW) } }
         item { QuickActions(onNavigate) }
     }
@@ -268,5 +271,41 @@ private fun ContinueReadingCard(page: Int, onClick: () -> Unit) {
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun WirdCard(wird: WirdToday?, onClick: () -> Unit) {
+    GlassCard(modifier = Modifier.fillMaxWidth(), onClick = onClick) {
+        Text("ورد اليوم", style = MaterialTheme.typography.titleMedium)
+        if (wird == null || !wird.hasAnyTarget) {
+            Text(
+                "حدّد وردك اليومي للتلاوة والحفظ والمراجعة، أو ابدأ ختمة.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 6.dp),
+            )
+        } else {
+            Column(Modifier.padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                WirdRow("التلاوة", wird.readPages, wird.readTarget, "صفحة")
+                WirdRow("الحفظ", wird.memorizedAyahs, wird.memorizeTarget, "آية")
+                WirdRow("المراجعة", wird.reviewedAyahs, wird.reviewTarget, "آية")
+            }
+        }
+    }
+}
+
+@Composable
+private fun WirdRow(label: String, done: Int, target: Int, unit: String) {
+    if (target <= 0) return
+    Column {
+        Row {
+            Text(label, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+            Text("${done.toArabicIndic()} / ${target.toArabicIndic()} $unit", style = MaterialTheme.typography.bodyMedium)
+        }
+        LinearProgressIndicator(
+            progress = { (done / target.toFloat()).coerceIn(0f, 1f) },
+            modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+        )
     }
 }

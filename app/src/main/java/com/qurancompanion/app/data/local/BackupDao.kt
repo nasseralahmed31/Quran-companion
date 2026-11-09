@@ -80,4 +80,13 @@ interface BackupDao {
 
     @Insert
     suspend fun insertActivity(items: List<ActivityEntity>)
+
+    @Query("SELECT * FROM reading_log")
+    suspend fun readingLog(): List<ReadingLogEntity>
+
+    @Query("DELETE FROM reading_log")
+    suspend fun deleteReadingLog()
+
+    @Insert
+    suspend fun insertReadingLog(items: List<ReadingLogEntity>)
 }

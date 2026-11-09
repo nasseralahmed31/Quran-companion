@@ -5,15 +5,21 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.qurancompanion.app.domain.model.ProgressSummary
+import com.qurancompanion.app.domain.model.WirdToday
 import com.qurancompanion.app.domain.repository.ProgressRepository
 import com.qurancompanion.app.domain.repository.SettingsRepository
+import com.qurancompanion.app.domain.repository.WirdRepository
 import com.qurancompanion.app.ui.common.appContainer
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 
-class HomeViewModel(repository: ProgressRepository, settings: SettingsRepository) : ViewModel() {
+class HomeViewModel(
+    repository: ProgressRepository,
+    settings: SettingsRepository,
+    wird: WirdRepository,
+) : ViewModel() {
     val summary: StateFlow<ProgressSummary> = repository.observeSummary()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ProgressSummary())
 
@@ -21,11 +27,14 @@ class HomeViewModel(repository: ProgressRepository, settings: SettingsRepository
     val lastReadPage: StateFlow<Int> = settings.settings.map { it.lastReadPage }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0)
 
+    val wirdToday: StateFlow<WirdToday?> = wird.observeToday()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
     companion object {
         val Factory = viewModelFactory {
             initializer {
                 val c = appContainer()
-                HomeViewModel(c.progressRepository, c.settingsRepository)
+                HomeViewModel(c.progressRepository, c.settingsRepository, c.wirdRepository)
             }
         }
     }

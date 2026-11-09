@@ -124,6 +124,14 @@ private fun Tile(entry: SurahMapEntry, onClick: () -> Unit) {
         Column(Modifier.padding(horizontal = 6.dp, vertical = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             Text(entry.surahId.toArabicIndic(), style = MaterialTheme.typography.labelMedium, color = color)
             Text(entry.name, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (entry.memorized > 0) {
+                val percent = maxOf(1, entry.memorized * 100 / entry.ayahCount.coerceAtLeast(1))
+                Text(
+                    "${percent.toArabicIndic()}٪",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = color,
+                )
+            }
             LinearProgressIndicator(
                 progress = { if (entry.ayahCount == 0) 0f else entry.memorized / entry.ayahCount.toFloat() },
                 color = color,

@@ -45,6 +45,21 @@ object ArabicText {
 object WordDiff {
     data class Word(val text: String, val differs: Boolean)
 
+    data class PairDiff(val onlyInFirst: List<String>, val onlyInSecond: List<String>)
+
+    /** Words that appear in one text but not in the other (counted as multisets, diacritics ignored). */
+    fun pairDifferences(first: String, second: String): PairDiff {
+        val a = ArabicText.tokenize(first)
+        val b = ArabicText.tokenize(second)
+        val remainingInB = b.normalized.toMutableList()
+        val onlyA = ArrayList<String>()
+        a.normalized.forEachIndexed { i, w -> if (!remainingInB.remove(w)) onlyA.add(a.original[i]) }
+        val remainingInA = a.normalized.toMutableList()
+        val onlyB = ArrayList<String>()
+        b.normalized.forEachIndexed { i, w -> if (!remainingInA.remove(w)) onlyB.add(b.original[i]) }
+        return PairDiff(onlyA, onlyB)
+    }
+
     /** Marks, in each text, the words that are not present in every one of the texts. */
     fun highlight(texts: List<String>): List<List<Word>> {
         val tokens = texts.map { ArabicText.tokenize(it) }

@@ -21,11 +21,13 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -56,6 +58,16 @@ fun MemorizeScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
     var showTargetDialog by rememberSaveable { mutableStateOf(false) }
+    var confirmPrevious by remember { mutableStateOf(false) }
+    // Mushaf order: surahs by number, each with its records under one header.
+    val rows = remember(state.entries) {
+        val out = mutableListOf<LogRow>()
+        state.entries.groupBy { it.surahId }.toSortedMap().forEach { (surahId, list) ->
+            out.add(LogRow.Header(surahId, memorizedAyahCount(list)))
+            list.sortedBy { it.fromAyah }.forEach { out.add(LogRow.Entry(it)) }
+        }
+        out
+    }
 
     LazyColumn(
         modifier = Modifier.fillMaxSize().statusBarsPadding(),
@@ -71,6 +83,13 @@ fun MemorizeScreen(
                 Text("تسجيل حفظ جديد")
             }
         }
+        if (state.entries.any { !it.isPrevious }) {
+            item {
+                OutlinedButton(onClick = { confirmPrevious = true }, modifier = Modifier.fillMaxWidth()) {
+                    Text("حوّل كل سجلاتي الحالية إلى حفظ سابق")
+                }
+            }
+        }
         item { Text("سجل الحفظ", style = MaterialTheme.typography.titleMedium) }
         if (!state.loading && state.entries.isEmpty()) {
             item {
@@ -81,20 +100,51 @@ fun MemorizeScreen(
                 )
             }
         }
-        items(state.entries, key = { it.id }) { entry ->
-            EntryCard(
-                entry = entry,
-                surahName = state.surahNames[entry.surahId].orEmpty(),
-                onEdit = { onOpenForm(entry.id) },
-                onOpenInMushaf = {
-                    scope.launch {
-                        viewModel.resolveAyah(entry.surahId, entry.fromAyah)?.let { (page, ayahId) ->
-                            onOpenReader(page, ayahId)
+        items(
+            rows,
+            key = { row ->
+                when (row) {
+                    is LogRow.Header -> "surah-${row.surahId}"
+                    is LogRow.Entry -> "entry-${row.entry.id}"
+                }
+            },
+        ) { row ->
+            when (row) {
+                is LogRow.Header -> SurahHeader(state.surahNames[row.surahId].orEmpty(), row.memorizedAyahs)
+                is LogRow.Entry -> EntryCard(
+                    entry = row.entry,
+                    surahName = state.surahNames[row.entry.surahId].orEmpty(),
+                    onEdit = { onOpenForm(row.entry.id) },
+                    onOpenInMushaf = {
+                        scope.launch {
+                            viewModel.resolveAyah(row.entry.surahId, row.entry.fromAyah)?.let { (page, ayahId) ->
+                                onOpenReader(page, ayahId)
+                            }
                         }
-                    }
-                },
-            )
+                    },
+                )
+            }
         }
+    }
+
+    if (confirmPrevious) {
+        AlertDialog(
+            onDismissRequest = { confirmPrevious = false },
+            title = { Text("تحويل كل السجلات إلى حفظ سابق؟") },
+            text = {
+                Text(
+                    "مفيد إن كنت أدخلت حفظًا قديمًا بتواريخ حديثة. تبقى سجلاتك وتدخل في نسبة حفظك، " +
+                        "لكنها لا تُحسب في وتيرتك اليومية ولا سلسلة الالتزام ولا تقدير ختم الحفظ.",
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmPrevious = false
+                    viewModel.markAllPrevious()
+                }) { Text("تحويل") }
+            },
+            dismissButton = { TextButton(onClick = { confirmPrevious = false }) { Text("إلغاء") } },
+        )
     }
 
     if (showTargetDialog) {
@@ -148,7 +198,7 @@ private fun EntryCard(
             Column(Modifier.weight(1f)) {
                 Text("سورة $surahName", style = MaterialTheme.typography.titleMedium)
                 Text(
-                    "${entry.rangeLabel()} • ${formatEpochDay(entry.memorizedOn)}",
+                    "${entry.rangeLabel()} • ${if (entry.isPrevious) "حفظ سابق" else formatEpochDay(entry.memorizedOn)}",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -206,4 +256,35 @@ private fun TargetDialog(current: Int, onDismiss: () -> Unit, onSave: (Int) -> U
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("إلغاء") } },
     )
+}
+
+private sealed interface LogRow {
+    data class Header(val surahId: Int, val memorizedAyahs: Int) : LogRow
+    data class Entry(val entry: MemorizationEntry) : LogRow
+}
+
+/** Ayahs covered by the memorized records of one surah (overlaps counted once). */
+private fun memorizedAyahCount(entries: List<MemorizationEntry>): Int {
+    var total = 0
+    var coveredUpTo = 0
+    for (r in entries.filter { it.state == MemorizationState.MEMORIZED }.sortedBy { it.fromAyah }) {
+        val start = maxOf(r.fromAyah, coveredUpTo + 1)
+        if (r.toAyah >= start) {
+            total += r.toAyah - start + 1
+            coveredUpTo = r.toAyah
+        }
+    }
+    return total
+}
+
+@Composable
+private fun SurahHeader(name: String, memorizedAyahs: Int) {
+    Column(Modifier.padding(top = 6.dp)) {
+        Text("سورة $name", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
+        Text(
+            if (memorizedAyahs > 0) "${memorizedAyahs.toArabicIndic()} آية محفوظة" else "قيد الحفظ",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
 }

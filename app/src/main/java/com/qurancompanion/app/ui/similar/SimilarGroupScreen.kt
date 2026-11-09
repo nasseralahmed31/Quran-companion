@@ -59,6 +59,25 @@ fun SimilarGroupScreen(groupId: Int, onBack: () -> Unit, onOpenReader: (page: In
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
+                if (s.commonStart.isNotEmpty()) {
+                    item {
+                        GlassCard(Modifier.fillMaxWidth()) {
+                            Text("نقطة الافتراق", style = MaterialTheme.typography.titleMedium)
+                            Text(
+                                "تتفق كلها في بدايتها: «${s.commonStart}»",
+                                style = MaterialTheme.typography.bodyMedium,
+                                modifier = Modifier.padding(top = 4.dp),
+                            )
+                            s.members.filter { it.nextWord.isNotEmpty() }.forEach { m ->
+                                Text(
+                                    "ثم تفترق عند: ${s.surahNames[m.ayah.surahId].orEmpty()} ${m.ayah.ayahNumber.toArabicIndic()} ← «${m.nextWord}»",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        }
+                    }
+                }
                 items(s.members, key = { it.ayah.id }) { m ->
                     GlassCard(Modifier.fillMaxWidth()) {
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {

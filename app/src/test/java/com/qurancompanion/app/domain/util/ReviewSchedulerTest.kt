@@ -102,4 +102,37 @@ class ReviewSchedulerTest {
         assertEquals(today, oldWeak)
         assertTrue(oldGood > oldWeak)
     }
+
+    @Test
+    fun repeatedMistakesShortenTheNextInterval() {
+        val history = listOf(ReviewSample(ReviewRating.WEAK, 5), ReviewSample(ReviewRating.AVERAGE, 3))
+        assertEquals(0.6, ReviewScheduler.historyFactor(history), 1e-9)
+        assertEquals(6, ReviewScheduler.adaptInterval(10, 0.6, MasteryLevel.GOOD))
+    }
+
+    @Test
+    fun aCleanStreakLengthensTheInterval() {
+        val clean = List(3) { ReviewSample(ReviewRating.EXCELLENT, 0) }
+        assertEquals(1.15, ReviewScheduler.historyFactor(clean), 1e-9)
+    }
+
+    @Test
+    fun shortOrEmptyHistoryChangesNothing() {
+        assertEquals(1.0, ReviewScheduler.historyFactor(emptyList()), 1e-9)
+        assertEquals(1.0, ReviewScheduler.historyFactor(listOf(ReviewSample(ReviewRating.GOOD, 0))), 1e-9)
+    }
+
+    @Test
+    fun weakPassagesAreCappedSoTheyComeBackOften() {
+        assertEquals(2, ReviewScheduler.adaptInterval(30, 1.0, MasteryLevel.WEAK))
+        assertEquals(6, ReviewScheduler.adaptInterval(30, 1.0, MasteryLevel.NEEDS_REVIEW))
+        assertEquals(30, ReviewScheduler.adaptInterval(30, 1.0, MasteryLevel.GOOD))
+    }
+
+    @Test
+    fun theUserIsToldWhyTheIntervalWasAdapted() {
+        assertTrue(ReviewScheduler.adaptationNote(0.6, 10, 6, MasteryLevel.GOOD) != null)
+        assertTrue(ReviewScheduler.adaptationNote(1.15, 10, 12, MasteryLevel.GOOD) != null)
+        assertEquals(null, ReviewScheduler.adaptationNote(1.0, 10, 10, MasteryLevel.GOOD))
+    }
 }

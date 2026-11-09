@@ -54,4 +54,13 @@ class SimilarityEngineTest {
         assertEquals(2, ArabicText.commonPrefixLength(listOf("a", "b", "c"), listOf("a", "b", "d")))
         assertEquals(0, ArabicText.commonPrefixLength(listOf("a"), listOf("b")))
     }
+
+    @Test
+    fun pairDifferencesListOnlyTheWordsMissingFromTheOtherText() {
+        val diff = WordDiff.pairDifferences("الف باء جيم", "الف باء دال")
+        assertEquals(listOf("جيم"), diff.onlyInFirst)
+        assertEquals(listOf("دال"), diff.onlyInSecond)
+        val same = WordDiff.pairDifferences("الف باء", "الف باء")
+        assertTrue(same.onlyInFirst.isEmpty() && same.onlyInSecond.isEmpty())
+    }
 }

@@ -1,5 +1,6 @@
 package com.qurancompanion.app.data.local
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
@@ -17,6 +18,7 @@ data class MemorizationEntryEntity(
     val note: String,
     val createdAt: Long,
     val updatedAt: Long,
+    @ColumnInfo(defaultValue = "0") val isPrevious: Boolean = false,
 )
 
 /** Current state of one ayah, derived from the newest record covering it. */
@@ -27,6 +29,7 @@ data class AyahProgressEntity(
     val state: String,
     val mastery: String,
     val memorizedOn: Long,
+    @ColumnInfo(defaultValue = "0") val isPrevious: Boolean = false,
 )
 
 @Entity(tableName = "activity_log", indices = [Index(value = ["day"])])

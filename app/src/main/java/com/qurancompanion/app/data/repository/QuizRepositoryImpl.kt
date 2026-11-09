@@ -7,6 +7,7 @@ import com.qurancompanion.app.data.local.QuranDatabase
 import com.qurancompanion.app.data.similarity.ArabicText
 import com.qurancompanion.app.domain.model.Achievement
 import com.qurancompanion.app.domain.model.QuestionResult
+import com.qurancompanion.app.domain.model.QuranConstants
 import com.qurancompanion.app.domain.model.QuizBuildResult
 import com.qurancompanion.app.domain.model.QuizFinish
 import com.qurancompanion.app.domain.model.QuizQuestion
@@ -16,6 +17,7 @@ import com.qurancompanion.app.domain.repository.QuizRepository
 import com.qurancompanion.app.domain.repository.ReviewRepository
 import com.qurancompanion.app.domain.repository.SimilarityRepository
 import com.qurancompanion.app.domain.util.EpochDay
+import com.qurancompanion.app.ui.common.toArabicIndic
 import kotlin.random.Random
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -30,7 +32,12 @@ class QuizRepositoryImpl(
 
     override suspend fun buildQuiz(type: QuizType, fromSurah: Int, toSurah: Int, count: Int): QuizBuildResult =
         withContext(Dispatchers.Default) {
-            val pool = insights.memorizedAyahs(fromSurah, toSurah)
+            // The comprehensive test ignores the chosen range and draws from everything memorized.
+            val pool = if (type == QuizType.COMPREHENSIVE) {
+                insights.memorizedAyahs(1, QuranConstants.TOTAL_SURAHS)
+            } else {
+                insights.memorizedAyahs(fromSurah, toSurah)
+            }
             if (pool.isEmpty()) {
                 return@withContext QuizBuildResult.Failure("لا توجد آيات محفوظة في هذا النطاق. سجّل حفظك أولًا.")
             }
@@ -47,6 +54,9 @@ class QuizRepositoryImpl(
                     }
                 QuizType.NEXT_AYAH -> buildNext(pool, count, random)
                 QuizType.SIMILAR -> buildSimilar(pool, count, random)
+                QuizType.SURAH_CHOICE -> buildSurahChoice(pool, count, random)
+                QuizType.RANDOM_START -> buildRandomStart(pool, count, random)
+                QuizType.COMPREHENSIVE -> buildComprehensive(pool, count, random)
             }
             if (questions.isEmpty()) {
                 QuizBuildResult.Failure(
@@ -138,6 +148,88 @@ class QuizRepositoryImpl(
                     options = order.map { optionTexts[it] },
                     correctIndex = order.indexOf(0),
                     optionAyahIds = order.map { optionIds[it] },
+                ),
+            )
+        }
+        return out
+    }
+
+    /** "Which surah is this ayah from?" Ayahs repeated word for word in another surah are skipped. */
+    private suspend fun buildSurahChoice(pool: List<AyahEntity>, count: Int, random: Random): List<QuizQuestion> {
+        val surahs = quranDao.allSurahs()
+        if (surahs.size < 4) return emptyList()
+        val occurrences = HashMap<String, Int>()
+        for (a in quranDao.allAyahs()) {
+            val key = ArabicText.tokenize(a.text).normalized.joinToString(" ")
+            occurrences[key] = (occurrences[key] ?: 0) + 1
+        }
+        val out = ArrayList<QuizQuestion>()
+        for (a in pool.shuffled(random)) {
+            if (out.size >= count) break
+            val key = ArabicText.tokenize(a.text).normalized.joinToString(" ")
+            if ((occurrences[key] ?: 0) > 1) continue
+            val correct = surahs.firstOrNull { it.id == a.surahId } ?: continue
+            val distractors = surahs.filter { it.id != a.surahId }.shuffled(random).take(3)
+            val names = (listOf(correct) + distractors).map { it.nameAr }
+            val order = names.indices.shuffled(random)
+            out.add(
+                QuizQuestion(
+                    QuizType.SURAH_CHOICE, a.id, a.surahId, a.ayahNumber,
+                    prompt = snippet(a.text, 14), answer = correct.nameAr,
+                    options = order.map { names[it] }, correctIndex = order.indexOf(0),
+                ),
+            )
+        }
+        return out
+    }
+
+    /** A random starting point in the user's memorized ayahs: recite three ayahs from there. */
+    private suspend fun buildRandomStart(pool: List<AyahEntity>, count: Int, random: Random): List<QuizQuestion> {
+        val out = ArrayList<QuizQuestion>()
+        for (a in pool.shuffled(random)) {
+            if (out.size >= count) break
+            val passage = arrayListOf(a)
+            var nextId = a.id + 1
+            while (passage.size < 3) {
+                val next = quranDao.getAyah(nextId) ?: break
+                if (next.surahId != a.surahId) break
+                passage.add(next)
+                nextId++
+            }
+            out.add(
+                QuizQuestion(
+                    QuizType.RANDOM_START, a.id, a.surahId, a.ayahNumber,
+                    prompt = ArabicText.tokenize(a.text).original.take(2).joinToString(" "),
+                    answer = passage.joinToString(" ") { it.text + " \uFD3F${it.ayahNumber.toArabicIndic()}\uFD3E" },
+                ),
+            )
+        }
+        return out
+    }
+
+    /**
+     * A random place in everything the user memorized: the ayah is shown and the following ayahs
+     * (only ones that are also memorized, in the same surah) are to be recited.
+     */
+    private fun buildComprehensive(pool: List<AyahEntity>, count: Int, random: Random): List<QuizQuestion> {
+        val byId = pool.associateBy { it.id }
+        val out = ArrayList<QuizQuestion>()
+        for (a in pool.shuffled(random)) {
+            if (out.size >= count) break
+            val following = ArrayList<AyahEntity>()
+            var id = a.id + 1
+            while (following.size < 3) {
+                val next = byId[id] ?: break
+                if (next.surahId != a.surahId) break
+                following.add(next)
+                id++
+            }
+            if (following.isEmpty()) continue
+            out.add(
+                QuizQuestion(
+                    QuizType.COMPREHENSIVE, a.id, a.surahId, a.ayahNumber,
+                    prompt = a.text,
+                    answer = following.joinToString(" ") { it.text + " \uFD3F${it.ayahNumber.toArabicIndic()}\uFD3E" },
                 ),
             )
         }

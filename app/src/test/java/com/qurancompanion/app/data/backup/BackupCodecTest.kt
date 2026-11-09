@@ -73,4 +73,25 @@ class BackupCodecTest {
         val orphanSchedule = sample().copy(schedules = listOf(sample().schedules[0].copy(entryId = 99)))
         assertTrue(failsWith { BackupCodec.decode(BackupCodec.encode(orphanSchedule)) })
     }
+
+    @Test
+    fun readingLogAndWirdSettingsSurviveTheRoundTrip() {
+        val data = sample().copy(
+            settings = sample().settings.copy(
+                lastReadPage = 77, bookmarks = listOf(3, 9),
+                wirdReadPages = 5, wirdReviewAyahs = 20, khatmStartDay = 20000L, khatmDays = 30,
+            ),
+            readingLog = listOf(
+                com.qurancompanion.app.data.local.ReadingLogEntity(1, 20000L),
+                com.qurancompanion.app.data.local.ReadingLogEntity(2, 20001L),
+            ),
+        )
+        assertEquals(data, BackupCodec.decode(BackupCodec.encode(data)))
+    }
+
+    @Test
+    fun aReadingLogWithAnInvalidPageIsRejected() {
+        val bad = sample().copy(readingLog = listOf(com.qurancompanion.app.data.local.ReadingLogEntity(999, 1L)))
+        assertTrue(failsWith { BackupCodec.decode(BackupCodec.encode(bad)) })
+    }
 }

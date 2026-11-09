@@ -10,7 +10,9 @@ import com.qurancompanion.app.domain.model.QuizType
 import com.qurancompanion.app.domain.model.ReviewItem
 import com.qurancompanion.app.domain.model.ReviewOutcome
 import com.qurancompanion.app.domain.model.ReviewRating
+import com.qurancompanion.app.domain.model.RolloverSummary
 import com.qurancompanion.app.domain.model.SimilarGroup
+import com.qurancompanion.app.domain.model.SimilarPair
 import com.qurancompanion.app.domain.model.StatsOverview
 import com.qurancompanion.app.domain.model.SurahMapEntry
 import kotlinx.coroutines.flow.Flow
@@ -34,6 +36,13 @@ interface ReviewRepository {
     ): ReviewOutcome
 
     suspend fun reschedule(entryId: Long, nextDay: Long)
+
+    /**
+     * Once per day: when review days were missed, re-dates the overdue passages from today (weakest
+     * first, spread by the daily review target) and pushes the rest back, so nothing piles up as overdue.
+     * Returns a summary when something moved.
+     */
+    suspend fun rollover(): RolloverSummary?
 }
 
 interface GoalRepository {
@@ -46,6 +55,7 @@ interface SimilarityRepository {
     /** Builds the similarity index from the Quran text if it does not exist yet. */
     suspend fun ensureIndexed(): Boolean
     suspend fun loadGroups(minScore: Double = 0.6): List<SimilarGroup>
+    suspend fun loadPairs(minScore: Double = 0.6): List<SimilarPair>
     fun observeConfusions(): Flow<List<Confusion>>
     fun observeMemorizedAyahIds(): Flow<Set<Int>>
 }

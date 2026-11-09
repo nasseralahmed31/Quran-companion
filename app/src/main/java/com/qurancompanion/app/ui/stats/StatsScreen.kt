@@ -111,7 +111,7 @@ private fun StatsContent(o: StatsOverview) {
                 Text(
                     when {
                         s.memorizedAyahs >= QuranConstants.TOTAL_AYAHS -> "أتممت حفظ القرآن كاملًا، بارك الله فيك."
-                        projected == null -> "يظهر التقدير بعد أن تسجّل حفظًا خلال آخر ٣٠ يومًا."
+                        projected == null -> "يظهر التقدير بعد أسبوع على الأقل من تسجيل حفظ جديد. الحفظ السابق لا يدخل في الوتيرة."
                         else -> "بوتيرتك الحالية (${o.paceAyahsPerDay.oneDecimal()} آية في اليوم) يكتمل حفظك في ${formatEpochDay(projected, o.today)}."
                     },
                     style = MaterialTheme.typography.bodyLarge,

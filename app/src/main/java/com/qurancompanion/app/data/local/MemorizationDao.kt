@@ -32,19 +32,28 @@ interface MemorizationDao {
     @Query("DELETE FROM memorization_entries WHERE id = :id")
     suspend fun deleteEntry(id: Long)
 
+    @Query("SELECT DISTINCT surahId FROM memorization_entries ORDER BY surahId")
+    suspend fun surahIdsWithEntries(): List<Int>
+
+    @Query("UPDATE memorization_entries SET isPrevious = 1, memorizedOn = 0")
+    suspend fun markAllEntriesPrevious()
+
+    @Query("UPDATE ayah_progress SET isPrevious = 1, memorizedOn = 0")
+    suspend fun markAllProgressPrevious()
+
     @Query("SELECT * FROM memorization_entries WHERE id = :id")
     suspend fun getEntry(id: Long): MemorizationEntryEntity?
 
-    @Query("SELECT * FROM memorization_entries ORDER BY memorizedOn DESC, id DESC")
+    @Query("SELECT * FROM memorization_entries ORDER BY surahId ASC, fromAyah ASC, id ASC")
     fun observeEntries(): Flow<List<MemorizationEntryEntity>>
 
     @Query("SELECT * FROM memorization_entries WHERE surahId = :surahId ORDER BY memorizedOn DESC, id DESC")
     suspend fun entriesForSurah(surahId: Int): List<MemorizationEntryEntity>
 
-    @Query("SELECT DISTINCT memorizedOn FROM memorization_entries ORDER BY memorizedOn DESC")
+    @Query("SELECT DISTINCT memorizedOn FROM memorization_entries WHERE isPrevious = 0 ORDER BY memorizedOn DESC")
     fun observeEntryDays(): Flow<List<Long>>
 
-    @Query("SELECT DISTINCT memorizedOn FROM memorization_entries ORDER BY memorizedOn DESC")
+    @Query("SELECT DISTINCT memorizedOn FROM memorization_entries WHERE isPrevious = 0 ORDER BY memorizedOn DESC")
     suspend fun entryDays(): List<Long>
 
     // ----- per-ayah progress -----
@@ -62,6 +71,9 @@ interface MemorizationDao {
 
     @Query("SELECT p.* FROM ayah_progress p INNER JOIN ayahs a ON a.id = p.ayahId WHERE a.page = :page")
     fun observePageProgress(page: Int): Flow<List<AyahProgressEntity>>
+
+    @Query("SELECT * FROM ayah_progress")
+    fun observeAllProgress(): Flow<List<AyahProgressEntity>>
 
     // ----- aggregates (state = MEMORIZED only) -----
     @Query("SELECT COUNT(*) FROM ayah_progress WHERE state = 'MEMORIZED'")
@@ -85,7 +97,7 @@ interface MemorizationDao {
     @Query(MEMORIZED_PAGES_SQL)
     fun observeMemorizedPagesCount(): Flow<Int>
 
-    @Query("SELECT COUNT(*) FROM ayah_progress WHERE memorizedOn = :day AND state = 'MEMORIZED'")
+    @Query("SELECT COUNT(*) FROM ayah_progress WHERE memorizedOn = :day AND state = 'MEMORIZED' AND isPrevious = 0")
     fun observeMemorizedOnDay(day: Long): Flow<Int>
 
     // ----- activity & achievements -----

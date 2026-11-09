@@ -33,6 +33,10 @@ class SettingsViewModel(
         viewModelScope.launch { repository.setColorTheme(theme) }
     }
 
+    fun setAutoShiftReviews(enabled: Boolean) {
+        viewModelScope.launch { repository.setAutoShiftReviews(enabled) }
+    }
+
     fun setReminderEnabled(type: ReminderType, enabled: Boolean) {
         viewModelScope.launch {
             val current = repository.settings.first().reminders.getValue(type)

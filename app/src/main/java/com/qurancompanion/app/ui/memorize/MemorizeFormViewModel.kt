@@ -45,6 +45,7 @@ data class MemorizeFormState(
     val state: MemorizationState = MemorizationState.MEMORIZED,
     val mastery: MasteryLevel = MasteryLevel.GOOD,
     val note: String = "",
+    val isPrevious: Boolean = false,
     val overlapCount: Int = 0,
     val error: String? = null,
     val saving: Boolean = false,
@@ -115,7 +116,8 @@ class MemorizeFormViewModel(
                     surahId = entry.surahId,
                     from = entry.fromAyah.toString(),
                     to = entry.toAyah.toString(),
-                    epochDay = entry.memorizedOn,
+                    epochDay = if (entry.isPrevious) EpochDay.today() else entry.memorizedOn,
+                    isPrevious = entry.isPrevious,
                     state = entry.state,
                     mastery = if (entry.state == MemorizationState.MEMORIZED) entry.mastery else MasteryLevel.GOOD,
                     note = entry.note,
@@ -171,6 +173,7 @@ class MemorizeFormViewModel(
     fun onState(value: MemorizationState) = _state.update { it.copy(state = value, error = null) }
     fun onMastery(value: MasteryLevel) = _state.update { it.copy(mastery = value) }
     fun onNote(value: String) = _state.update { it.copy(note = value.take(500)) }
+    fun onPrevious(value: Boolean) = _state.update { it.copy(isPrevious = value, error = null) }
 
     private fun refreshSummary() {
         summaryJob?.cancel()
@@ -249,10 +252,11 @@ class MemorizeFormViewModel(
                 surahId = surah.id,
                 fromAyah = from,
                 toAyah = to,
-                memorizedOn = s.epochDay,
+                memorizedOn = if (s.isPrevious) 0L else s.epochDay,
                 state = s.state,
                 mastery = mastery,
                 note = s.note,
+                isPrevious = s.isPrevious,
             )
             persist { memorization.save(entry) }
         } else {
@@ -260,7 +264,7 @@ class MemorizeFormViewModel(
                 return fail("أدخل رقمي الصفحتين بين ١ و ٦٠٤ (من ≤ إلى)")
             }
             persist {
-                memorization.saveRange(s.rangeStartId, s.rangeEndId, s.epochDay, s.state, mastery, s.note)
+                memorization.saveRange(s.rangeStartId, s.rangeEndId, s.epochDay, s.state, mastery, s.note, s.isPrevious)
             }
         }
     }

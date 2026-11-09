@@ -7,6 +7,7 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
@@ -30,6 +31,15 @@ class DataStoreSettingsRepository(private val context: Context) : SettingsReposi
     private val colorThemeKey = stringPreferencesKey("color_theme")
     private val lastReadKey = intPreferencesKey("last_read_page")
     private val bookmarksKey = stringSetPreferencesKey("bookmarks")
+    private val wirdReadKey = intPreferencesKey("wird_read_pages")
+    private val wirdReviewKey = intPreferencesKey("wird_review_ayahs")
+    private val khatmStartKey = longPreferencesKey("khatm_start_day")
+    private val khatmDaysKey = intPreferencesKey("khatm_days")
+    private val autoShiftKey = booleanPreferencesKey("auto_shift_reviews")
+    private val rolloverDayKey = longPreferencesKey("review_rollover_day")
+    private val rolloverNoteDayKey = longPreferencesKey("rollover_note_day")
+    private val rolloverOverdueKey = intPreferencesKey("rollover_overdue")
+    private val rolloverShiftKey = intPreferencesKey("rollover_shift")
 
     private fun enabledKey(type: ReminderType) = booleanPreferencesKey("reminder_${type.name}_enabled")
     private fun hourKey(type: ReminderType) = intPreferencesKey("reminder_${type.name}_hour")
@@ -48,6 +58,15 @@ class DataStoreSettingsRepository(private val context: Context) : SettingsReposi
             lastReadPage = (p[lastReadKey] ?: 0).coerceIn(0, QuranConstants.TOTAL_PAGES),
             bookmarks = p[bookmarksKey].orEmpty().mapNotNull { it.toIntOrNull() }
                 .filter { it in 1..QuranConstants.TOTAL_PAGES }.toSet(),
+            wirdReadPages = p[wirdReadKey] ?: 0,
+            wirdReviewAyahs = p[wirdReviewKey] ?: 0,
+            khatmStartDay = p[khatmStartKey] ?: 0L,
+            khatmDays = p[khatmDaysKey] ?: 0,
+            autoShiftReviews = p[autoShiftKey] ?: true,
+            reviewRolloverDay = p[rolloverDayKey] ?: 0L,
+            rolloverNoteDay = p[rolloverNoteDayKey] ?: 0L,
+            rolloverOverdue = p[rolloverOverdueKey] ?: 0,
+            rolloverShift = p[rolloverShiftKey] ?: 0,
             reminders = ReminderType.entries.associateWith { type ->
                 ReminderSetting(
                     enabled = p[enabledKey(type)] ?: false,
@@ -83,6 +102,36 @@ class DataStoreSettingsRepository(private val context: Context) : SettingsReposi
         }
     }
 
+    override suspend fun setWirdTargets(readPages: Int, reviewAyahs: Int) {
+        context.settingsDataStore.edit { p ->
+            p[wirdReadKey] = readPages.coerceIn(0, QuranConstants.TOTAL_PAGES)
+            p[wirdReviewKey] = reviewAyahs.coerceIn(0, QuranConstants.TOTAL_AYAHS)
+        }
+    }
+
+    override suspend fun setAutoShiftReviews(enabled: Boolean) {
+        context.settingsDataStore.edit { it[autoShiftKey] = enabled }
+    }
+
+    override suspend fun setReviewRolloverDay(day: Long) {
+        context.settingsDataStore.edit { it[rolloverDayKey] = day }
+    }
+
+    override suspend fun setRolloverNote(day: Long, overdueMoved: Int, shiftDays: Int) {
+        context.settingsDataStore.edit { p ->
+            p[rolloverNoteDayKey] = day
+            p[rolloverOverdueKey] = overdueMoved
+            p[rolloverShiftKey] = shiftDays
+        }
+    }
+
+    override suspend fun setKhatmPlan(startDay: Long, days: Int) {
+        context.settingsDataStore.edit { p ->
+            p[khatmStartKey] = startDay.coerceAtLeast(0L)
+            p[khatmDaysKey] = if (startDay > 0) days.coerceIn(1, 1000) else 0
+        }
+    }
+
     override suspend fun setReminder(type: ReminderType, setting: ReminderSetting) {
         context.settingsDataStore.edit { p ->
             p[enabledKey(type)] = setting.enabled
@@ -98,6 +147,10 @@ class DataStoreSettingsRepository(private val context: Context) : SettingsReposi
             p[colorThemeKey] = settings.colorTheme.name
             p[lastReadKey] = settings.lastReadPage.coerceIn(0, QuranConstants.TOTAL_PAGES)
             p[bookmarksKey] = settings.bookmarks.filter { it in 1..QuranConstants.TOTAL_PAGES }.map { it.toString() }.toSet()
+            p[wirdReadKey] = settings.wirdReadPages.coerceIn(0, QuranConstants.TOTAL_PAGES)
+            p[wirdReviewKey] = settings.wirdReviewAyahs.coerceIn(0, QuranConstants.TOTAL_AYAHS)
+            p[khatmStartKey] = settings.khatmStartDay.coerceAtLeast(0L)
+            p[khatmDaysKey] = settings.khatmDays.coerceIn(0, 1000)
             ReminderType.entries.forEach { type ->
                 val r = settings.reminders[type] ?: return@forEach
                 p[enabledKey(type)] = r.enabled

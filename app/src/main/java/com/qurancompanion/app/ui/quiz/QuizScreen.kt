@@ -100,10 +100,18 @@ private fun SetupView(s: QuizUiState, vm: QuizViewModel) {
                 }
             }
         }
-        Text("نطاق السور (من آيات محفوظك فقط)", style = MaterialTheme.typography.titleMedium)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            NumberField(s.fromSurah, vm::setFrom, "من السورة", Modifier.weight(1f), maxLength = 3)
-            NumberField(s.toSurah, vm::setTo, "إلى السورة", Modifier.weight(1f), maxLength = 3)
+        if (s.type == QuizType.COMPREHENSIVE) {
+            Text(
+                "يُختار الموضع من كامل محفوظك، فلا حاجة لتحديد نطاق.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        } else {
+            Text("نطاق السور (من آيات محفوظك فقط)", style = MaterialTheme.typography.titleMedium)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                NumberField(s.fromSurah, vm::setFrom, "من السورة", Modifier.weight(1f), maxLength = 3)
+                NumberField(s.toSurah, vm::setTo, "إلى السورة", Modifier.weight(1f), maxLength = 3)
+            }
         }
         Text("عدد الأسئلة", style = MaterialTheme.typography.titleMedium)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -167,6 +175,45 @@ private fun QuestionView(s: QuizUiState, q: QuizQuestion, surahName: String, vm:
                 QuranText(q.prompt + " …", fontFamily)
                 OptionsList(q, s.chosen, vm, fontFamily)
                 NextButton(s, vm)
+            }
+            QuizType.SURAH_CHOICE -> {
+                Text("في أي سورة هذه الآية؟", style = MaterialTheme.typography.titleMedium)
+                QuranText(q.prompt, fontFamily)
+                OptionsList(q, s.chosen, vm, fontFamily)
+                NextButton(s, vm)
+            }
+            QuizType.RANDOM_START -> {
+                GlassCard(Modifier.fillMaxWidth()) {
+                    Text(
+                        "ابدأ التلاوة من سورة $surahName • الآية ${q.ayahNumber.toArabicIndic()}",
+                        style = MaterialTheme.typography.titleMedium,
+                    )
+                    Text(
+                        "بدايتها: ${q.prompt} …",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Text(
+                        "تلُ ثلاث آيات من حفظك ثم اكشف النص.",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.secondary,
+                        modifier = Modifier.padding(top = 4.dp),
+                    )
+                }
+                SelfGradedArea(s, q.answer, vm, fontFamily)
+            }
+            QuizType.COMPREHENSIVE -> {
+                Text(
+                    "أكمل بعد هذه الآية (سورة $surahName • الآية ${q.ayahNumber.toArabicIndic()}):",
+                    style = MaterialTheme.typography.titleMedium,
+                )
+                QuranText(q.prompt, fontFamily)
+                Text(
+                    "تلُ الآيات التي تليها من حفظك ثم اكشف النص.",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                SelfGradedArea(s, q.answer, vm, fontFamily)
             }
         }
     }

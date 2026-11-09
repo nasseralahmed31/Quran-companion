@@ -67,8 +67,9 @@ class QuizViewModel(
 
     fun start() {
         val s = _state.value
-        val from = s.fromSurah.toIntOrNull()
-        val to = s.toSurah.toIntOrNull()
+        val comprehensive = s.type == QuizType.COMPREHENSIVE
+        val from = if (comprehensive) 1 else s.fromSurah.toIntOrNull()
+        val to = if (comprehensive) QuranConstants.TOTAL_SURAHS else s.toSurah.toIntOrNull()
         val max = QuranConstants.TOTAL_SURAHS
         if (from == null || to == null || from !in 1..max || to !in 1..max || from > to) {
             _state.update { it.copy(error = "حدّد نطاق سور صحيحًا بين ١ و ١١٤ (من ≤ إلى)") }

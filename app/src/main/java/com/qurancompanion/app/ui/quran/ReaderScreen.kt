@@ -31,6 +31,7 @@ import androidx.compose.material.icons.rounded.BookmarkBorder
 import androidx.compose.material.icons.rounded.Bookmarks
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
@@ -75,6 +76,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.qurancompanion.app.data.similarity.ArabicText
 import com.qurancompanion.app.domain.model.Ayah
 import com.qurancompanion.app.domain.model.AyahMark
 import com.qurancompanion.app.domain.model.AyahMarker
@@ -94,6 +96,7 @@ import com.qurancompanion.app.ui.theme.Gold
 import com.qurancompanion.app.ui.theme.rememberQuranFontFamily
 import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.map
@@ -127,6 +130,8 @@ fun ReaderScreen(
     var mushafMode by rememberSaveable { mutableStateOf(true) }
     var hideMode by rememberSaveable { mutableStateOf(false) }
     var revealed by remember { mutableStateOf(setOf<Int>()) }
+    var cursorId by remember { mutableStateOf<Int?>(null) }
+    var cursorWords by remember { mutableStateOf(0) }
     var selected by remember { mutableStateOf<Ayah?>(null) }
     var showBookmarks by remember { mutableStateOf(false) }
     var sliderValue by remember { mutableFloatStateOf(pagerState.currentPage.toFloat()) }
@@ -142,6 +147,17 @@ fun ReaderScreen(
                 viewModel.saveLastRead(it + 1)
             }
     }
+    // A page counts as read once the user stays on it for a while (feeds the daily wird and the khatmah).
+    LaunchedEffect(pagerState) {
+        snapshotFlow { pagerState.currentPage to pagerState.isScrollInProgress }
+            .filter { !it.second }
+            .map { it.first }
+            .distinctUntilChanged()
+            .collectLatest { page ->
+                delay(15_000)
+                viewModel.markRead(page + 1)
+            }
+    }
     LaunchedEffect(message) {
         if (message != null) {
             delay(2500)
@@ -150,6 +166,15 @@ fun ReaderScreen(
     }
 
     val currentPage = pagerState.currentPage + 1
+    val pageFlow = remember(currentPage) { viewModel.observePage(currentPage) }
+    val currentPageAyahs by pageFlow.collectAsStateWithLifecycle(initialValue = emptyList())
+    LaunchedEffect(currentPage, hideMode) {
+        cursorId = null
+        cursorWords = 0
+    }
+    // The ayah being recited: the one the user tapped, otherwise the first one not yet revealed.
+    val target: Ayah? = cursorId?.let { id -> currentPageAyahs.firstOrNull { it.id == id } }
+        ?: currentPageAyahs.firstOrNull { it.id !in revealed }
     Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
         ScreenHeader("المصحف الشريف", onBack) {
             Text(
@@ -184,7 +209,7 @@ fun ReaderScreen(
         }
         if (hideMode) {
             Text(
-                "تظهر أول كلمة من كل آية؛ اضغط الآية لتكشفها.",
+                "كل الآيات مخفية. اكشف كلمة كلمة بزر «الكلمة التالية» أو الآية كاملة بزر «الآية كاملة»، واضغط آية مخفية لتجعلها الآية الحالية.",
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
@@ -210,10 +235,56 @@ fun ReaderScreen(
                 hideMode = hideMode,
                 revealed = revealed,
                 markers = markers,
+                partial = cursorId?.let { it to cursorWords },
                 onAyahClick = { ayah ->
-                    if (hideMode && ayah.id !in revealed) revealed = revealed + ayah.id else selected = ayah
+                    if (hideMode && ayah.id !in revealed) {
+                        cursorId = ayah.id
+                        cursorWords = 0
+                    } else {
+                        selected = ayah
+                    }
                 },
             )
+        }
+
+        if (hideMode) {
+            Row(
+                Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Button(
+                    enabled = target != null,
+                    onClick = {
+                        val ayah = target ?: return@Button
+                        val wordCount = ArabicText.tokenize(ayah.text).original.size
+                        val shownWords = (if (cursorId == ayah.id) cursorWords else 0) + 1
+                        if (shownWords >= wordCount) {
+                            revealed = revealed + ayah.id
+                            cursorId = null
+                            cursorWords = 0
+                        } else {
+                            cursorId = ayah.id
+                            cursorWords = shownWords
+                        }
+                    },
+                    modifier = Modifier.weight(1f),
+                ) { Text("الكلمة التالية") }
+                OutlinedButton(
+                    enabled = target != null,
+                    onClick = {
+                        target?.let { revealed = revealed + it.id }
+                        cursorId = null
+                        cursorWords = 0
+                    },
+                    modifier = Modifier.weight(1f),
+                ) { Text("الآية كاملة") }
+                TextButton(onClick = {
+                    revealed = emptySet()
+                    cursorId = null
+                    cursorWords = 0
+                }) { Text("إخفاء الكل") }
+            }
         }
 
         Slider(
@@ -361,6 +432,7 @@ private fun QuranPage(
     hideMode: Boolean,
     revealed: Set<Int>,
     markers: Map<Int, Set<AyahMarker>>,
+    partial: Pair<Int, Int>?,
     onAyahClick: (Ayah) -> Unit,
 ) {
     val flow = remember(page) { viewModel.observePage(page) }
@@ -369,9 +441,9 @@ private fun QuranPage(
     val marks by marksFlow.collectAsStateWithLifecycle(initialValue = emptyMap())
 
     if (mushafMode) {
-        MushafPage(page, ayahs, highlightAyahId, marks, surahNames, fontFamily, hideMode, revealed, markers, onAyahClick)
+        MushafPage(page, ayahs, highlightAyahId, marks, surahNames, fontFamily, hideMode, revealed, markers, partial, onAyahClick)
     } else {
-        ScrollPage(page, ayahs, highlightAyahId, marks, surahNames, fontFamily, hideMode, revealed, markers, onAyahClick)
+        ScrollPage(page, ayahs, highlightAyahId, marks, surahNames, fontFamily, hideMode, revealed, markers, partial, onAyahClick)
     }
 }
 
@@ -416,6 +488,7 @@ private fun MushafPage(
     hideMode: Boolean,
     revealed: Set<Int>,
     markers: Map<Int, Set<AyahMarker>>,
+    partial: Pair<Int, Int>?,
     onAyahClick: (Ayah) -> Unit,
 ) {
     val colors = rememberMarkColors()
@@ -430,10 +503,10 @@ private fun MushafPage(
         val heightPx = with(density) { (maxHeight - inset * 2 - 40.dp).roundToPx() }
         // The size is fitted on the full text so hiding ayahs never changes the layout.
         val fitText = remember(ayahs, marks, colors, surahNames, markers) {
-            buildMushafText(ayahs, 0, marks, colors, surahNames, gold, false, emptySet(), markers).text
+            buildMushafText(ayahs, 0, marks, colors, surahNames, gold, false, emptySet(), markers, null).text
         }
-        val shown = remember(ayahs, highlightAyahId, marks, colors, surahNames, hideMode, revealed, markers) {
-            buildMushafText(ayahs, highlightAyahId, marks, colors, surahNames, gold, hideMode, revealed, markers)
+        val shown = remember(ayahs, highlightAyahId, marks, colors, surahNames, hideMode, revealed, markers, partial) {
+            buildMushafText(ayahs, highlightAyahId, marks, colors, surahNames, gold, hideMode, revealed, markers, partial)
         }
         val fontSize = remember(fitText, widthPx, heightPx, fontFamily) {
             fitFontSize(measurer, fitText, widthPx, heightPx, fontFamily)
@@ -489,6 +562,7 @@ private fun buildMushafText(
     hideMode: Boolean,
     revealed: Set<Int>,
     markers: Map<Int, Set<AyahMarker>>,
+    partial: Pair<Int, Int>?,
 ): PageText {
     val spans = ArrayList<AyahSpan>()
     val text = buildAnnotatedString {
@@ -501,7 +575,7 @@ private fun buildMushafText(
                 }
             }
             withStyle(ParagraphStyle(textAlign = TextAlign.Justify)) {
-                appendAyahs(run, highlightAyahId, marks, colors, spans, hideMode, revealed, markers)
+                appendAyahs(run, highlightAyahId, marks, colors, spans, hideMode, revealed, markers, partial)
             }
         }
     }
@@ -538,6 +612,7 @@ private fun ScrollPage(
     hideMode: Boolean,
     revealed: Set<Int>,
     markers: Map<Int, Set<AyahMarker>>,
+    partial: Pair<Int, Int>?,
     onAyahClick: (Ayah) -> Unit,
 ) {
     Column(
@@ -561,7 +636,7 @@ private fun ScrollPage(
             if (run.first().ayahNumber == 1) {
                 SurahBanner(surahNames[run.first().surahId].orEmpty())
             }
-            AyahRun(run, highlightAyahId, marks, fontFamily, hideMode, revealed, markers, onAyahClick)
+            AyahRun(run, highlightAyahId, marks, fontFamily, hideMode, revealed, markers, partial, onAyahClick)
         }
     }
 }
@@ -589,12 +664,13 @@ private fun AyahRun(
     hideMode: Boolean,
     revealed: Set<Int>,
     markers: Map<Int, Set<AyahMarker>>,
+    partial: Pair<Int, Int>?,
     onAyahClick: (Ayah) -> Unit,
 ) {
     val colors = rememberMarkColors()
-    val built = remember(run, highlightAyahId, marks, colors, hideMode, revealed, markers) {
+    val built = remember(run, highlightAyahId, marks, colors, hideMode, revealed, markers, partial) {
         val spans = ArrayList<AyahSpan>()
-        val text = buildAnnotatedString { appendAyahs(run, highlightAyahId, marks, colors, spans, hideMode, revealed, markers) }
+        val text = buildAnnotatedString { appendAyahs(run, highlightAyahId, marks, colors, spans, hideMode, revealed, markers, partial) }
         PageText(text, spans)
     }
     TappableAyahText(

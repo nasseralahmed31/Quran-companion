@@ -6,6 +6,7 @@ import com.qurancompanion.app.data.local.ConfusionEntity
 import com.qurancompanion.app.data.local.GoalEntity
 import com.qurancompanion.app.data.local.MemorizationEntryEntity
 import com.qurancompanion.app.data.local.QuizResultEntity
+import com.qurancompanion.app.data.local.ReadingLogEntity
 import com.qurancompanion.app.data.local.ReviewScheduleEntity
 import com.qurancompanion.app.data.local.ReviewSessionEntity
 import com.qurancompanion.app.domain.model.GoalKind
@@ -28,6 +29,10 @@ data class BackupSettings(
     val reminders: List<BackupReminder>,
     val lastReadPage: Int = 0,
     val bookmarks: List<Int> = emptyList(),
+    val wirdReadPages: Int = 0,
+    val wirdReviewAyahs: Int = 0,
+    val khatmStartDay: Long = 0,
+    val khatmDays: Int = 0,
 )
 
 /** Everything personal. ayah_progress is derived from [entries] and rebuilt after a restore. */
@@ -42,6 +47,7 @@ data class BackupData(
     val quizResults: List<QuizResultEntity>,
     val achievements: List<AchievementEntity>,
     val activity: List<ActivityEntity>,
+    val readingLog: List<ReadingLogEntity> = emptyList(),
 )
 
 object BackupCodec {
@@ -60,6 +66,10 @@ object BackupCodec {
         settings.put("colorTheme", d.settings.colorTheme)
         settings.put("lastReadPage", d.settings.lastReadPage)
         settings.put("bookmarks", JSONArray(d.settings.bookmarks))
+        settings.put("wirdReadPages", d.settings.wirdReadPages)
+        settings.put("wirdReviewAyahs", d.settings.wirdReviewAyahs)
+        settings.put("khatmStartDay", d.settings.khatmStartDay)
+        settings.put("khatmDays", d.settings.khatmDays)
         settings.put(
             "reminders",
             array(d.settings.reminders) { r ->
@@ -74,6 +84,7 @@ object BackupCodec {
                 JSONObject().put("id", e.id).put("surahId", e.surahId).put("fromAyah", e.fromAyah).put("toAyah", e.toAyah)
                     .put("memorizedOn", e.memorizedOn).put("state", e.state).put("mastery", e.mastery)
                     .put("note", e.note).put("createdAt", e.createdAt).put("updatedAt", e.updatedAt)
+                    .put("isPrevious", e.isPrevious)
             },
         )
         root.put(
@@ -126,6 +137,7 @@ object BackupCodec {
                     .put("toAyah", a.toAyah ?: JSONObject.NULL).put("detail", a.detail)
             },
         )
+        root.put("readingLog", array(d.readingLog) { r -> JSONObject().put("page", r.page).put("day", r.day) })
         return root.toString()
     }
 
@@ -158,6 +170,10 @@ object BackupCodec {
                     reminders = reminders,
                     lastReadPage = s.optInt("lastReadPage", 0),
                     bookmarks = s.optJSONArray("bookmarks")?.let { arr -> (0 until arr.length()).map { arr.getInt(it) } }.orEmpty(),
+                    wirdReadPages = s.optInt("wirdReadPages", 0),
+                    wirdReviewAyahs = s.optInt("wirdReviewAyahs", 0),
+                    khatmStartDay = s.optLong("khatmStartDay", 0L),
+                    khatmDays = s.optInt("khatmDays", 0),
                 ),
                 entries = objects(root.getJSONArray("entries")).map {
                     MemorizationEntryEntity(
@@ -165,6 +181,7 @@ object BackupCodec {
                         toAyah = it.getInt("toAyah"), memorizedOn = it.getLong("memorizedOn"), state = it.getString("state"),
                         mastery = it.getString("mastery"), note = it.getString("note"),
                         createdAt = it.getLong("createdAt"), updatedAt = it.getLong("updatedAt"),
+                        isPrevious = it.optBoolean("isPrevious", false),
                     )
                 },
                 schedules = objects(root.getJSONArray("schedules")).map {
@@ -215,6 +232,9 @@ object BackupCodec {
                         detail = it.getString("detail"),
                     )
                 },
+                readingLog = root.optJSONArray("readingLog")
+                    ?.let { arr -> objects(arr).map { ReadingLogEntity(it.getInt("page"), it.getLong("day")) } }
+                    .orEmpty(),
             )
         } catch (e: JSONException) {
             throw BackupFormatException("بيانات النسخة ناقصة أو تالفة")
@@ -238,6 +258,7 @@ object BackupCodec {
         val kinds = GoalKind.entries.map { it.name }.toSet()
         val units = GoalUnit.entries.map { it.name }.toSet()
         if (d.goals.any { it.kind !in kinds || it.unit !in units }) throw BackupFormatException("هدف بنوع غير معروف")
+        if (d.readingLog.any { it.page !in 1..QuranConstants.TOTAL_PAGES }) throw BackupFormatException("سجل قراءة بصفحة غير صالحة")
     }
 
     private fun <T> array(items: List<T>, build: (T) -> JSONObject): JSONArray {

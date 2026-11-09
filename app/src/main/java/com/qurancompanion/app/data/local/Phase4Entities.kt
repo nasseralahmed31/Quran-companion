@@ -71,3 +71,10 @@ data class QuizResultEntity(
     val correct: Int,
     val rating: String,
 )
+
+/** A mushaf page the user actually read on a given day (feeds the daily wird and the khatmah). */
+@Entity(tableName = "reading_log", primaryKeys = ["page", "day"], indices = [Index(value = ["day"])])
+data class ReadingLogEntity(
+    val page: Int,
+    val day: Long,
+)

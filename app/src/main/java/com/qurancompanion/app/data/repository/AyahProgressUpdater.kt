@@ -23,7 +23,7 @@ class AyahProgressUpdater(
             if (winner == null) {
                 removals.add(ayahId)
             } else {
-                upserts.add(AyahProgressEntity(ayahId, winner.id, winner.state, winner.mastery, winner.memorizedOn))
+                upserts.add(AyahProgressEntity(ayahId, winner.id, winner.state, winner.mastery, winner.memorizedOn, winner.isPrevious))
             }
         }
         if (removals.isNotEmpty()) memorization.deleteProgress(removals)

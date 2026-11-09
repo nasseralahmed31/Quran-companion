@@ -4,6 +4,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AutoStories
 import androidx.compose.material.icons.rounded.Backup
 import androidx.compose.material.icons.rounded.BarChart
+import androidx.compose.material.icons.rounded.CalendarMonth
 import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.EmojiEvents
 import androidx.compose.material.icons.rounded.Flag
@@ -33,6 +34,7 @@ object Routes {
     const val MAP = "map"
     const val SIMILAR = "similar"
     const val GOAL_FORM = "goal_form"
+    const val WIRD = "wird"
 
     const val READER = "reader/{page}?ayah={ayah}"
     const val MEMORIZE_FORM = "memorize_form?id={id}&start={start}&end={end}"
@@ -65,9 +67,10 @@ val TopLevelDestinations = listOf(
 val MoreDestinations = listOf(
     AppDestination(Routes.STATS, "الإحصائيات", Icons.Rounded.BarChart),
     AppDestination(Routes.GOALS, "الأهداف ومساعد التوزيع", Icons.Rounded.Flag),
+    AppDestination(Routes.WIRD, "ورد القرآن والختمة", Icons.Rounded.CalendarMonth),
     AppDestination(Routes.MAP, "خريطة الحفظ", Icons.Rounded.GridView),
     AppDestination(Routes.QUIZ, "الاختبارات", Icons.Rounded.Quiz),
-    AppDestination(Routes.SIMILAR, "كاشف المتشابهات", Icons.Rounded.ContentCopy),
+    AppDestination(Routes.SIMILAR, "اكتشف أخطاء الحفظ (المتشابهات)", Icons.Rounded.ContentCopy),
     AppDestination(Routes.ACHIEVEMENTS, "الإنجازات", Icons.Rounded.EmojiEvents),
     AppDestination(Routes.ACTIVITY, "سجل النشاط", Icons.Rounded.History),
     AppDestination(Routes.SETTINGS, "الإعدادات والتذكيرات", Icons.Rounded.Settings),

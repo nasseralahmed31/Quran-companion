@@ -13,6 +13,7 @@ import com.qurancompanion.app.MainActivity
 import com.qurancompanion.app.R
 import com.qurancompanion.app.domain.model.ReminderType
 import com.qurancompanion.app.domain.model.ReviewStatus
+import com.qurancompanion.app.domain.util.ReviewOrdering
 import com.qurancompanion.app.ui.common.toArabicIndic
 import kotlinx.coroutines.flow.first
 
@@ -72,8 +73,13 @@ object NotificationHelper {
                 if (summary.dueReviewAyahs <= 0) {
                     null
                 } else {
+                    val urgent = container.reviewRepository.observeItems().first().count {
+                        (it.status == ReviewStatus.OVERDUE || it.status == ReviewStatus.DUE_TODAY) &&
+                            ReviewOrdering.needsReview(it.mastery)
+                    }
                     "وقت المراجعة" to
-                        "عندك ${summary.dueReviewAyahs.toArabicIndic()} آية مستحقة للمراجعة، وتبدأ بما يحتاج مراجعة أولًا."
+                        "عندك ${summary.dueReviewAyahs.toArabicIndic()} آية مستحقة للمراجعة" +
+                        if (urgent > 0) "، منها ${urgent.toArabicIndic()} مقطع يحتاج مراجعة وسنبدأ به." else "."
                 }
             ReminderType.OVERDUE -> {
                 val overdue = container.reviewRepository.observeItems().first().count { it.status == ReviewStatus.OVERDUE }
@@ -85,6 +91,14 @@ object NotificationHelper {
                 } else {
                     "هدف اليوم" to "بقي ${(summary.todayTargetAyahs - summary.todayDoneAyahs).toArabicIndic()} آية لتُتم هدفك اليومي."
                 }
+            ReminderType.WIRD -> {
+                val wird = container.wirdRepository.observeToday().first()
+                val left = ArrayList<String>()
+                if (wird.readTarget > wird.readPages) left.add("تلاوة ${(wird.readTarget - wird.readPages).toArabicIndic()} صفحة")
+                if (wird.memorizeTarget > wird.memorizedAyahs) left.add("حفظ ${(wird.memorizeTarget - wird.memorizedAyahs).toArabicIndic()} آية")
+                if (wird.reviewTarget > wird.reviewedAyahs) left.add("مراجعة ${(wird.reviewTarget - wird.reviewedAyahs).toArabicIndic()} آية")
+                if (left.isEmpty()) null else "ورد اليوم" to "بقي من وردك: ${left.joinToString(" • ")}."
+            }
         }
     }
 

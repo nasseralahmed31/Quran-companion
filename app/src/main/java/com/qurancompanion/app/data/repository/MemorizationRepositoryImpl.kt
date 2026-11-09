@@ -14,6 +14,7 @@ import com.qurancompanion.app.domain.model.MemorizationEntry
 import com.qurancompanion.app.domain.model.MemorizationState
 import com.qurancompanion.app.domain.model.SaveResult
 import com.qurancompanion.app.domain.repository.MemorizationRepository
+import com.qurancompanion.app.domain.util.EntryMerger
 import com.qurancompanion.app.domain.util.EpochDay
 import com.qurancompanion.app.domain.util.ReviewScheduler
 import kotlinx.coroutines.flow.Flow
@@ -38,7 +39,7 @@ class MemorizationRepositoryImpl(
 
     override suspend fun save(entry: MemorizationEntry): SaveResult = db.withTransaction {
         val now = System.currentTimeMillis()
-        saveOne(entry, now)
+        saveOne(entry, now, log = true)
         SaveResult(achievements.evaluate(now))
     }
 
@@ -49,6 +50,7 @@ class MemorizationRepositoryImpl(
         state: MemorizationState,
         mastery: MasteryLevel,
         note: String,
+        isPrevious: Boolean,
     ): SaveResult = db.withTransaction {
         val first = quranDao.getAyah(startAyahId)
         val last = quranDao.getAyah(endAyahId)
@@ -63,7 +65,12 @@ class MemorizationRepositoryImpl(
             } else {
                 quranDao.surahAyahCount(surahId) ?: throw IllegalStateException("سورة غير موجودة")
             }
-            saveOne(MemorizationEntry(0L, surahId, from, to, memorizedOn, state, mastery, note), now)
+            val entry = MemorizationEntry(
+                id = 0L, surahId = surahId, fromAyah = from, toAyah = to,
+                memorizedOn = if (isPrevious) 0L else memorizedOn,
+                state = state, mastery = mastery, note = note, isPrevious = isPrevious,
+            )
+            saveOne(entry, now, log = true)
         }
         SaveResult(achievements.evaluate(now))
     }
@@ -85,6 +92,29 @@ class MemorizationRepositoryImpl(
                     detail = "",
                 ),
             )
+        }
+    }
+
+    override suspend fun consolidate(): Int = db.withTransaction {
+        var merges = 0
+        val now = System.currentTimeMillis()
+        for (surahId in dao.surahIdsWithEntries()) {
+            while (true) {
+                val others = dao.entriesForSurah(surahId)
+                val target = others.firstOrNull { e ->
+                    EntryMerger.merge(e.toDomain(), others.map { it.toOther() }).mergedIds.isNotEmpty()
+                } ?: break
+                saveOne(target.toDomain(), now, log = false)
+                merges++
+            }
+        }
+        merges
+    }
+
+    override suspend fun markAllAsPrevious() {
+        db.withTransaction {
+            dao.markAllEntriesPrevious()
+            dao.markAllProgressPrevious()
         }
     }
 
@@ -110,47 +140,64 @@ class MemorizationRepositoryImpl(
     override fun observePageMarks(page: Int): Flow<Map<Int, AyahMark>> =
         dao.observePageProgress(page).map { list -> list.associate { it.ayahId to markOf(it) } }
 
-    private suspend fun saveOne(entry: MemorizationEntry, now: Long) {
+    override fun observeAllMarks(): Flow<Map<Int, AyahMark>> =
+        dao.observeAllProgress().map { list -> list.associate { it.ayahId to markOf(it) } }
+
+    private suspend fun saveOne(requested: MemorizationEntry, now: Long, log: Boolean) {
+        // One record per run of ayahs: absorb the records of this surah that overlap or touch it.
+        val others = dao.entriesForSurah(requested.surahId).map { it.toOther() }
+        val merge = EntryMerger.merge(requested, others)
+        val entry = merge.entry
+        val partialSchedules = merge.partialIds.mapNotNull { reviewDao.getSchedule(it) }
+        merge.mergedIds.forEach { id ->
+            dao.deleteEntry(id)
+            reviewDao.deleteSchedule(id)
+        }
+
         val type: ActivityType
         val entryId: Long
         if (entry.id == 0L) {
             entryId = dao.insertEntry(entry.toEntity(createdAt = now, updatedAt = now))
-            updater.recomputeRange(entry.surahId, entry.fromAyah, entry.toAyah)
             type = ActivityType.ADDED
         } else {
             val old = dao.getEntry(entry.id) ?: throw IllegalStateException("سجل الحفظ غير موجود")
             dao.updateEntry(entry.toEntity(createdAt = old.createdAt, updatedAt = now))
             updater.recomputeRange(old.surahId, old.fromAyah, old.toAyah)
-            updater.recomputeRange(entry.surahId, entry.fromAyah, entry.toAyah)
             entryId = entry.id
             type = ActivityType.EDITED
         }
-        syncSchedule(entryId, entry)
-        dao.insertActivity(
-            ActivityEntity(
-                type = type.name,
-                day = EpochDay.today(),
-                timestamp = now,
-                surahId = entry.surahId,
-                fromAyah = entry.fromAyah,
-                toAyah = entry.toAyah,
-                detail = entry.displayMastery.label,
-            ),
-        )
+        updater.recomputeRange(entry.surahId, entry.fromAyah, entry.toAyah)
+        syncSchedule(entryId, entry, partialSchedules)
+        if (log) {
+            dao.insertActivity(
+                ActivityEntity(
+                    type = type.name,
+                    day = EpochDay.today(),
+                    timestamp = now,
+                    surahId = entry.surahId,
+                    fromAyah = entry.fromAyah,
+                    toAyah = entry.toAyah,
+                    detail = entry.displayMastery.label,
+                ),
+            )
+        }
     }
 
     /**
      * Memorized records are reviewed; records still being learned are not scheduled.
      * A passage flagged as weak / needing review is pulled forward so it never waits behind
-     * passages that are in good shape.
+     * passages that are in good shape. When records were merged, the earliest schedule among the
+     * parts that were not replaced is kept, so a weak part is never postponed by the merge.
      */
-    private suspend fun syncSchedule(entryId: Long, entry: MemorizationEntry) {
+    private suspend fun syncSchedule(entryId: Long, entry: MemorizationEntry, inherited: List<ReviewScheduleEntity>) {
         if (entry.state != MemorizationState.MEMORIZED) {
             reviewDao.deleteSchedule(entryId)
             return
         }
         val today = EpochDay.today()
-        val existing = reviewDao.getSchedule(entryId)
+        val own = reviewDao.getSchedule(entryId)
+        val earliestInherited = inherited.minByOrNull { it.nextReviewDay }?.copy(entryId = entryId)
+        val existing = listOfNotNull(own, earliestInherited).minByOrNull { it.nextReviewDay }
         if (existing == null) {
             val initial = ReviewScheduler.initial()
             reviewDao.upsertSchedule(
@@ -175,6 +222,8 @@ class MemorizationRepositoryImpl(
             reviewDao.upsertSchedule(
                 existing.copy(nextReviewDay = pullTo, intervalDays = (pullTo - today).toInt().coerceAtLeast(1)),
             )
+        } else if (existing != own) {
+            reviewDao.upsertSchedule(existing)
         }
     }
 }
@@ -188,7 +237,12 @@ private fun markOf(p: AyahProgressEntity): AyahMark = when {
 private fun MemorizationEntryEntity.toDomain(): MemorizationEntry {
     val parsedState = runCatching { MemorizationState.valueOf(state) }.getOrDefault(MemorizationState.IN_PROGRESS)
     val parsedMastery = runCatching { MasteryLevel.valueOf(mastery) }.getOrDefault(MasteryLevel.IN_PROGRESS)
-    return MemorizationEntry(id, surahId, fromAyah, toAyah, memorizedOn, parsedState, parsedMastery, note)
+    return MemorizationEntry(id, surahId, fromAyah, toAyah, memorizedOn, parsedState, parsedMastery, note, isPrevious)
+}
+
+private fun MemorizationEntryEntity.toOther(): EntryMerger.Other {
+    val e = toDomain()
+    return EntryMerger.Other(e.id, e.fromAyah, e.toAyah, e.state, e.mastery, e.isPrevious, e.note, e.memorizedOn)
 }
 
 private fun MemorizationEntry.toEntity(createdAt: Long, updatedAt: Long) = MemorizationEntryEntity(
@@ -202,4 +256,5 @@ private fun MemorizationEntry.toEntity(createdAt: Long, updatedAt: Long) = Memor
     note = note.trim(),
     createdAt = createdAt,
     updatedAt = updatedAt,
+    isPrevious = isPrevious,
 )

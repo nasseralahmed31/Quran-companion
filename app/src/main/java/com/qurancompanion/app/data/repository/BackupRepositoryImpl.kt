@@ -35,6 +35,10 @@ class BackupRepositoryImpl(
                 reminders = s.reminders.map { (type, r) -> BackupReminder(type.name, r.enabled, r.hour, r.minute) },
                 lastReadPage = s.lastReadPage,
                 bookmarks = s.bookmarks.sorted(),
+                wirdReadPages = s.wirdReadPages,
+                wirdReviewAyahs = s.wirdReviewAyahs,
+                khatmStartDay = s.khatmStartDay,
+                khatmDays = s.khatmDays,
             ),
             entries = dao.entries(),
             schedules = dao.schedules(),
@@ -44,6 +48,7 @@ class BackupRepositoryImpl(
             quizResults = dao.quizResults(),
             achievements = dao.achievements(),
             activity = dao.activity(),
+            readingLog = dao.readingLog(),
         )
         return BackupCodec.encode(data)
     }
@@ -53,6 +58,7 @@ class BackupRepositoryImpl(
         db.withTransaction {
             dao.deleteProgress()
             dao.deleteActivity()
+            dao.deleteReadingLog()
             dao.deleteAchievements()
             dao.deleteQuizResults()
             dao.deleteConfusions()
@@ -69,6 +75,7 @@ class BackupRepositoryImpl(
             dao.insertQuizResults(data.quizResults)
             dao.insertAchievements(data.achievements)
             dao.insertActivity(data.activity)
+            dao.insertReadingLog(data.readingLog)
 
             // Per-ayah progress is derived: rebuild it from the restored records.
             data.entries.forEach { updater.recomputeRange(it.surahId, it.fromAyah, it.toAyah) }
@@ -86,6 +93,10 @@ private fun BackupSettings.toAppSettings(): AppSettings {
         dailyTargetAyahs = dailyTarget.coerceIn(0, QuranConstants.TOTAL_AYAHS),
         lastReadPage = lastReadPage.coerceIn(0, QuranConstants.TOTAL_PAGES),
         bookmarks = bookmarks.filter { it in 1..QuranConstants.TOTAL_PAGES }.toSet(),
+        wirdReadPages = wirdReadPages.coerceIn(0, QuranConstants.TOTAL_PAGES),
+        wirdReviewAyahs = wirdReviewAyahs.coerceIn(0, QuranConstants.TOTAL_AYAHS),
+        khatmStartDay = khatmStartDay.coerceAtLeast(0L),
+        khatmDays = khatmDays.coerceIn(0, 1000),
         reminders = ReminderType.entries.associateWith { type ->
             val saved = reminders.firstOrNull { it.type == type.name }
             if (saved == null) {

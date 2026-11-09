@@ -23,6 +23,21 @@ interface SettingsRepository {
     /** Adds the page to the bookmarks, or removes it if it is already there. */
     suspend fun toggleBookmark(page: Int)
 
+    /** Daily recitation (pages) and review (ayahs) targets; 0 means none. */
+    suspend fun setWirdTargets(readPages: Int, reviewAyahs: Int)
+
+    /** Automatically move review dates forward when review days are missed. */
+    suspend fun setAutoShiftReviews(enabled: Boolean)
+
+    /** The last day the review schedule was rolled forward. */
+    suspend fun setReviewRolloverDay(day: Long)
+
+    /** Remembers what the last roll-forward did, for a note on the review screen. */
+    suspend fun setRolloverNote(day: Long, overdueMoved: Int, shiftDays: Int)
+
+    /** Starts (startDay > 0) or cancels (0) the recitation khatmah plan. */
+    suspend fun setKhatmPlan(startDay: Long, days: Int)
+
     /** Replaces every setting (used when restoring a backup). */
     suspend fun restore(settings: AppSettings)
 }

@@ -28,8 +28,9 @@ import com.qurancompanion.app.domain.util.EpochDay
         SimilarPairEntity::class,
         ConfusionEntity::class,
         QuizResultEntity::class,
+        ReadingLogEntity::class,
     ],
-    version = 3,
+    version = 4,
     exportSchema = false,
 )
 abstract class QuranDatabase : RoomDatabase() {
@@ -40,6 +41,7 @@ abstract class QuranDatabase : RoomDatabase() {
     abstract fun insightsDao(): InsightsDao
     abstract fun statsDao(): StatsDao
     abstract fun backupDao(): BackupDao
+    abstract fun readingDao(): ReadingDao
 
     companion object {
         /** Adds review scheduling, goals, similar-ayah data, confusions and quiz history. */
@@ -95,9 +97,22 @@ abstract class QuranDatabase : RoomDatabase() {
             }
         }
 
+        /** Adds the reading log (pages read per day) used by the daily wird and the khatmah plan. */
+        private val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `reading_log` (`page` INTEGER NOT NULL, `day` INTEGER NOT NULL, " +
+                        "PRIMARY KEY(`page`, `day`))",
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_reading_log_day` ON `reading_log` (`day`)")
+                db.execSQL("ALTER TABLE `memorization_entries` ADD COLUMN `isPrevious` INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE `ayah_progress` ADD COLUMN `isPrevious` INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
         fun create(context: Context): QuranDatabase =
             Room.databaseBuilder(context, QuranDatabase::class.java, "quran_companion.db")
-                .addMigrations(MIGRATION_2_3)
+                .addMigrations(MIGRATION_2_3, MIGRATION_3_4)
                 .fallbackToDestructiveMigrationFrom(1)
                 .build()
     }

@@ -216,9 +216,36 @@ fun ReviewSessionScreen(
                 } else {
                     // Explicit null check: outcome is now safely non-null.
                     val outcome = s.outcome
+<<<<<<< HEAD
 
                     if (outcome != null) {
                         GlassCard(Modifier.fillMaxWidth()) {
+=======
+                    GlassCard(Modifier.fillMaxWidth()) {
+                        Text("تم تسجيل المراجعة", style = MaterialTheme.typography.titleMedium)
+                        Text(
+                            "المراجعة القادمة: ${formatEpochDay(outcome.nextReviewDay)} (بعد ${outcome.intervalDays.toArabicIndic()} يوم)",
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.padding(top = 4.dp),
+                        )
+                        Text(
+                            "مستوى الإتقان الآن: ${outcome.newMastery.label}",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        outcome.adaptationNote?.let {
+                            Text(
+                                it,
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.secondary,
+                                modifier = Modifier.padding(top = 4.dp),
+                            )
+                        }
+                    }
+                    if (outcome.suggestRememorize) {
+                        GlassCard(Modifier.fillMaxWidth(), borderColor = MaterialTheme.colorScheme.error) {
+                            Text("يُنصح بإعادة حفظ هذا المقطع", style = MaterialTheme.typography.titleMedium)
+>>>>>>> ce11b72 (v3)
                             Text(
                                 "تم تسجيل المراجعة",
                                 style = MaterialTheme.typography.titleMedium

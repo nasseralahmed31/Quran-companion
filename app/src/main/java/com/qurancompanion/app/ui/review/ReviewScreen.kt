@@ -66,6 +66,7 @@ fun ReviewScreen(
 ) {
     val items by viewModel.items.collectAsStateWithLifecycle()
     val names by viewModel.surahNames.collectAsStateWithLifecycle()
+    val rolloverNote by viewModel.rolloverNote.collectAsStateWithLifecycle()
     var filter by rememberSaveable { mutableIntStateOf(0) }
     var rescheduleTarget by remember { mutableStateOf<ReviewItem?>(null) }
 
@@ -121,6 +122,19 @@ fun ReviewScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 4.dp),
                 )
+            }
+        }
+        rolloverNote?.let { note ->
+            item {
+                GlassCard(Modifier.fillMaxWidth()) {
+                    Text(note, style = MaterialTheme.typography.bodyMedium)
+                    Text(
+                        "يمكنك إيقاف هذه الميزة من الإعدادات.",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 4.dp),
+                    )
+                }
             }
         }
         item {

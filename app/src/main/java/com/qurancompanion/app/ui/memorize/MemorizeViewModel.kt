@@ -26,7 +26,7 @@ data class MemorizeUiState(
 
 class MemorizeViewModel(
     private val quran: QuranRepository,
-    memorization: MemorizationRepository,
+    private val memorization: MemorizationRepository,
     private val settings: SettingsRepository,
     progress: ProgressRepository,
 ) : ViewModel() {
@@ -44,6 +44,14 @@ class MemorizeViewModel(
             todayDone = summary.todayDoneAyahs,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), MemorizeUiState())
+
+    /** For users who entered old memorization with recent dates: it stops counting as new progress. */
+    fun markAllPrevious() {
+        viewModelScope.launch {
+            memorization.markAllAsPrevious()
+            memorization.consolidate()
+        }
+    }
 
     fun setDailyTarget(ayahs: Int) {
         viewModelScope.launch { settings.setDailyTarget(ayahs) }

@@ -45,6 +45,12 @@ interface ReviewDao {
     @Query("$REVIEW_ITEM_SELECT WHERE r.entryId = :entryId")
     suspend fun getItemRow(entryId: Long): ReviewItemRow?
 
+    @Query(REVIEW_ITEM_SELECT)
+    suspend fun itemRows(): List<ReviewItemRow>
+
+    @Query("UPDATE review_schedules SET nextReviewDay = :day WHERE entryId = :entryId")
+    suspend fun setNextDay(entryId: Long, day: Long)
+
     @Query("SELECT * FROM review_schedules WHERE entryId = :entryId")
     suspend fun getSchedule(entryId: Long): ReviewScheduleEntity?
 
@@ -68,6 +74,12 @@ interface ReviewDao {
 
     @Query("SELECT COALESCE(SUM(toAyah - fromAyah + 1), 0) FROM review_sessions")
     suspend fun reviewedAyahs(): Int
+
+    @Query("SELECT COALESCE(SUM(toAyah - fromAyah + 1), 0) FROM review_sessions WHERE reviewedOn = :day")
+    fun observeReviewedOnDay(day: Long): Flow<Int>
+
+    @Query("SELECT * FROM review_sessions WHERE entryId = :entryId ORDER BY timestamp DESC LIMIT :limit")
+    suspend fun recentSessions(entryId: Long, limit: Int): List<ReviewSessionEntity>
 
     @Query("SELECT DISTINCT reviewedOn FROM review_sessions")
     fun observeReviewDays(): Flow<List<Long>>
@@ -95,7 +107,7 @@ interface PlanningDao {
         "SELECT COALESCE(SUM(1.0 / pc.cnt), 0.0) FROM ayah_progress p " +
             "INNER JOIN ayahs a ON a.id = p.ayahId " +
             "INNER JOIN (SELECT page AS pg, COUNT(*) AS cnt FROM ayahs GROUP BY page) pc ON pc.pg = a.page " +
-            "WHERE p.memorizedOn = :day AND p.state = 'MEMORIZED'",
+            "WHERE p.memorizedOn = :day AND p.state = 'MEMORIZED' AND p.isPrevious = 0",
     )
     fun observePagesOnDay(day: Long): Flow<Double>
 }
@@ -141,7 +153,7 @@ interface InsightsDao {
 
 @Dao
 interface StatsDao {
-    @Query("SELECT memorizedOn AS day, COUNT(*) AS total FROM ayah_progress WHERE state = 'MEMORIZED' GROUP BY memorizedOn ORDER BY memorizedOn")
+    @Query("SELECT memorizedOn AS day, COUNT(*) AS total FROM ayah_progress WHERE state = 'MEMORIZED' AND isPrevious = 0 GROUP BY memorizedOn ORDER BY memorizedOn")
     fun observeMemorizedPerDay(): Flow<List<DayCountRow>>
 
     @Query("SELECT reviewedOn AS day, SUM(toAyah - fromAyah + 1) AS total FROM review_sessions GROUP BY reviewedOn ORDER BY reviewedOn")
@@ -150,8 +162,11 @@ interface StatsDao {
     @Query("SELECT mastery AS level, COUNT(*) AS total FROM ayah_progress GROUP BY mastery")
     fun observeMasteryCounts(): Flow<List<MasteryCountRow>>
 
-    @Query("SELECT COUNT(*) FROM memorization_entries")
+    @Query("SELECT COUNT(*) FROM memorization_entries WHERE isPrevious = 0")
     fun observeEntryCount(): Flow<Int>
+
+    @Query("SELECT COUNT(*) FROM ayah_progress WHERE state = 'MEMORIZED' AND isPrevious = 1")
+    fun observePreviousCount(): Flow<Int>
 
     @Query("SELECT COUNT(*) FROM review_sessions")
     fun observeReviewSessionCount(): Flow<Int>
@@ -168,4 +183,16 @@ interface StatsDao {
             "WHERE p.state = 'MEMORIZED' GROUP BY a.surahId",
     )
     fun observeSurahProgress(): Flow<List<SurahProgressRow>>
+}
+
+@Dao
+interface ReadingDao {
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertAll(items: List<ReadingLogEntity>)
+
+    @Query("SELECT COUNT(*) FROM reading_log WHERE day = :day")
+    fun observePagesOnDay(day: Long): Flow<Int>
+
+    @Query("SELECT COUNT(DISTINCT page) FROM reading_log WHERE day >= :sinceDay")
+    fun observeDistinctPagesSince(sinceDay: Long): Flow<Int>
 }

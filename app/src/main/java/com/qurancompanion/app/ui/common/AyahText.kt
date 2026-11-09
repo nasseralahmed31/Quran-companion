@@ -9,6 +9,7 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
+import com.qurancompanion.app.data.similarity.ArabicText
 import com.qurancompanion.app.domain.model.Ayah
 import com.qurancompanion.app.domain.model.AyahMark
 import com.qurancompanion.app.domain.model.AyahMarker
@@ -40,7 +41,8 @@ fun rememberMarkColors(): MarkColors {
 
 /**
  * Appends ayah texts followed by ornate end-of-ayah numbers, highlighting the target and
- * memorized ayahs. In [hideMode] an ayah shows only its first word until its id is in [revealed].
+ * memorized ayahs. In [hideMode] every ayah is hidden until its id is in [revealed]; [partial] (ayah id,
+ * words) shows the first words of the ayah being recited.
  * Hizb-quarter starts get a "۞" before them and sajdas a "۩" after them. Each ayah's character
  * range is added to [spans] when given.
  */
@@ -53,6 +55,7 @@ fun AnnotatedString.Builder.appendAyahs(
     hideMode: Boolean = false,
     revealed: Set<Int> = emptySet(),
     markers: Map<Int, Set<AyahMarker>> = emptyMap(),
+    partial: Pair<Int, Int>? = null,
 ) {
     ayahs.forEach { a ->
         val start = length
@@ -71,7 +74,13 @@ fun AnnotatedString.Builder.appendAyahs(
             }
         }
         val hidden = hideMode && a.id !in revealed
-        val shown = if (hidden) a.text.substringBefore(' ') + " …" else a.text
+        val shown = when {
+            !hidden -> a.text
+            // The current ayah shows only the words revealed so far; every other hidden ayah is a placeholder.
+            partial != null && partial.first == a.id && partial.second > 0 ->
+                ArabicText.tokenize(a.text).original.take(partial.second).joinToString(" ") + " …"
+            else -> "· · ·"
+        }
         if (background != null) {
             withStyle(SpanStyle(background = background)) { append(shown) }
         } else {

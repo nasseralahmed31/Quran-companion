@@ -20,6 +20,7 @@ class ReminderWorker(context: Context, params: WorkerParameters) : CoroutineWork
         if (!setting.enabled) return Result.success() // turned off meanwhile: the chain simply ends
 
         try {
+            container.reviewRepository.rollover() // so the counts below reflect the shifted schedule
             NotificationHelper.maybeNotify(applicationContext, type, container)
         } catch (e: CancellationException) {
             throw e

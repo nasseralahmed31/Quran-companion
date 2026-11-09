@@ -39,6 +39,7 @@ import com.qurancompanion.app.ui.settings.SettingsScreen
 import com.qurancompanion.app.ui.similar.SimilarGroupScreen
 import com.qurancompanion.app.ui.similar.SimilarScreen
 import com.qurancompanion.app.ui.stats.StatsScreen
+import com.qurancompanion.app.ui.wird.WirdScreen
 
 private fun NavHostController.navigateTo(route: String) {
     if (TopLevelDestinations.any { it.route == route }) {
@@ -182,6 +183,12 @@ fun AppRoot() {
                 )
             }
             composable(Routes.GOAL_FORM) { GoalFormScreen(onDone = back) }
+            composable(Routes.WIRD) {
+                WirdScreen(
+                    onBack = back,
+                    onOpenReader = { page -> navController.navigateTo(Routes.reader(page)) },
+                )
+            }
             composable(Routes.STATS) { StatsScreen(onBack = back) }
             composable(Routes.MAP) {
                 MapScreen(
